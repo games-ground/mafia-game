@@ -57,13 +57,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "game_actions_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "game_actions_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
@@ -75,13 +68,6 @@ export type Database = {
             columns: ["target_id"]
             isOneToOne: false
             referencedRelation: "room_players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "game_actions_target_id_fkey"
-            columns: ["target_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -147,29 +133,8 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "game_state_detective_target_id_fkey"
-            columns: ["detective_target_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "game_state_doctor_target_id_fkey"
             columns: ["doctor_target_id"]
-            isOneToOne: false
-            referencedRelation: "room_players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "game_state_doctor_target_id_fkey"
-            columns: ["doctor_target_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "game_state_mafia_target_id_fkey"
-            columns: ["mafia_target_id"]
             isOneToOne: false
             referencedRelation: "room_players"
             referencedColumns: ["id"]
@@ -178,7 +143,7 @@ export type Database = {
             foreignKeyName: "game_state_mafia_target_id_fkey"
             columns: ["mafia_target_id"]
             isOneToOne: false
-            referencedRelation: "room_players_safe"
+            referencedRelation: "room_players"
             referencedColumns: ["id"]
           },
           {
@@ -224,13 +189,6 @@ export type Database = {
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "room_players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
             referencedColumns: ["id"]
           },
           {
@@ -441,116 +399,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "votes_target_id_fkey"
-            columns: ["target_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "votes_voter_id_fkey"
             columns: ["voter_id"]
             isOneToOne: false
             referencedRelation: "room_players"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "votes_voter_id_fkey"
-            columns: ["voter_id"]
-            isOneToOne: false
-            referencedRelation: "room_players_safe"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
     Views: {
-      room_players_safe: {
-        Row: {
-          id: string | null
-          is_alive: boolean | null
-          is_ready: boolean | null
-          joined_at: string | null
-          player_id: string | null
-          role: Database["public"]["Enums"]["role_type"] | null
-          room_id: string | null
-        }
-        Insert: {
-          id?: string | null
-          is_alive?: boolean | null
-          is_ready?: boolean | null
-          joined_at?: string | null
-          player_id?: string | null
-          role?: never
-          room_id?: string | null
-        }
-        Update: {
-          id?: string | null
-          is_alive?: boolean | null
-          is_ready?: boolean | null
-          joined_at?: string | null
-          player_id?: string | null
-          role?: never
-          room_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "room_players_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "room_players_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "rooms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
-      get_mafia_partners: {
-        Args: { p_player_id: string; p_room_id: string }
-        Returns: {
-          nickname: string
-          partner_player_id: string
-          room_player_id: string
-        }[]
-      }
-      get_own_role: {
-        Args: { p_player_id: string; p_room_id: string }
-        Returns: string
-      }
-      kick_player: {
-        Args: {
-          p_host_player_id: string
-          p_room_id: string
-          p_target_room_player_id: string
-        }
-        Returns: boolean
-      }
-      start_game: {
-        Args: { p_host_player_id: string; p_room_id: string }
-        Returns: boolean
-      }
-      update_room_config: {
-        Args: {
-          p_day_duration?: number
-          p_detective_count?: number
-          p_doctor_count?: number
-          p_host_player_id: string
-          p_mafia_count?: number
-          p_night_duration?: number
-          p_night_mode?: string
-          p_reveal_roles_on_death?: boolean
-          p_room_id: string
-          p_show_vote_counts?: boolean
-        }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       game_phase:

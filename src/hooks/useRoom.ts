@@ -92,6 +92,13 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     fetchRoom();
   }, [fetchRoom]);
 
+  // Refetch room players when playerId changes (needed for getting roles after game start)
+  useEffect(() => {
+    if (room && playerId) {
+      fetchRoomPlayers(room.id);
+    }
+  }, [room?.id, playerId]);
+
   useEffect(() => {
     if (!room) return;
 
@@ -100,7 +107,9 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${room.id}` },
-        () => fetchRoomPlayers(room.id)
+        () => {
+          fetchRoomPlayers(room.id);
+        }
       )
       .on(
         'postgres_changes',
@@ -116,7 +125,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [room?.id]);
+  }, [room?.id, playerId]);
 
   async function createRoom(hostId: string): Promise<string | null> {
     const code = generateRoomCode();

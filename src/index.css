@@ -1,0 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark & Mysterious Mafia Theme */
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 45 10% 90%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 45 10% 90%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 45 10% 90%;
+
+    --primary: 0 70% 45%;
+    --primary-foreground: 45 10% 95%;
+
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 45 10% 90%;
+
+    --muted: 220 10% 12%;
+    --muted-foreground: 45 5% 55%;
+
+    --accent: 45 60% 50%;
+    --accent-foreground: 0 0% 5%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 45 10% 95%;
+
+    --success: 140 60% 40%;
+    --success-foreground: 45 10% 95%;
+
+    --warning: 35 90% 50%;
+    --warning-foreground: 0 0% 5%;
+
+    --mafia: 0 70% 45%;
+    --mafia-foreground: 45 10% 95%;
+
+    --detective: 220 80% 55%;
+    --detective-foreground: 45 10% 95%;
+
+    --doctor: 140 60% 45%;
+    --doctor-foreground: 45 10% 95%;
+
+    --civilian: 45 20% 50%;
+    --civilian-foreground: 0 0% 5%;
+
+    --night: 240 40% 8%;
+    --day: 45 30% 15%;
+
+    --border: 220 10% 18%;
+    --input: 220 10% 15%;
+    --ring: 0 70% 45%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 45 10% 90%;
+    --sidebar-primary: 0 70% 45%;
+    --sidebar-primary-foreground: 45 10% 95%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 45 10% 90%;
+    --sidebar-border: 220 10% 18%;
+    --sidebar-ring: 0 70% 45%;
+
+    --font-display: 'Cinzel', serif;
+    --font-body: 'Crimson Text', serif;
+  }
+
+  .dark {
+    --background: 0 0% 4%;
+    --foreground: 45 10% 90%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 45 10% 90%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 45 10% 90%;
+
+    --primary: 0 70% 45%;
+    --primary-foreground: 45 10% 95%;
+
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 45 10% 90%;
+
+    --muted: 220 10% 12%;
+    --muted-foreground: 45 5% 55%;
+
+    --accent: 45 60% 50%;
+    --accent-foreground: 0 0% 5%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 45 10% 95%;
+
+    --border: 220 10% 18%;
+    --input: 220 10% 15%;
+    --ring: 0 70% 45%;
+
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 45 10% 90%;
+    --sidebar-primary: 0 70% 45%;
+    --sidebar-primary-foreground: 45 10% 95%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 45 10% 90%;
+    --sidebar-border: 220 10% 18%;
+    --sidebar-ring: 0 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-wide;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+  }
+
+  .bg-gradient-dark {
+    background: radial-gradient(ellipse at top, hsl(220 15% 10%) 0%, hsl(0 0% 4%) 70%);
+  }
+
+  .bg-gradient-night {
+    background: radial-gradient(ellipse at top, hsl(var(--night)) 0%, hsl(0 0% 2%) 100%);
+  }
+
+  .bg-gradient-day {
+    background: radial-gradient(ellipse at top, hsl(var(--day)) 0%, hsl(0 0% 4%) 100%);
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.3)];
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Fog effect for atmosphere */
+.fog-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: 
+    radial-gradient(ellipse at 20% 50%, hsl(0 0% 100% / 0.02) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, hsl(0 0% 100% / 0.02) 0%, transparent 50%);
+  z-index: 1;
+}

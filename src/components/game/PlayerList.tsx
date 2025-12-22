@@ -1,0 +1,261 @@
+import { useState } from 'react';
+import { RoomPlayer, Vote, GamePhase, RoleType, Player, ROLE_INFO } from '@/types/game';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skull, User, Check, Target, Shield, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ActionConfirmDialog } from './ActionConfirmDialog';
+
+interface PlayerListProps {
+  players: (RoomPlayer & { player: Player })[];
+  currentPlayerId: string;
+  selectedTargetId: string | null;
+  votes: Vote[];
+  phase: GamePhase;
+  canSelect: boolean;
+  onSelect: (playerId: string) => void;
+  currentRole: RoleType | null;
+}
+
+export function PlayerList({
+  players,
+  currentPlayerId,
+  selectedTargetId,
+  votes,
+  phase,
+  canSelect,
+  onSelect,
+  currentRole,
+}: PlayerListProps) {
+  const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
+  
+  const isNight = phase === 'night';
+  const isVoting = phase === 'day_voting';
+  const isMafia = currentRole === 'mafia';
+
+  // Count votes per player
+  const voteCount: Record<string, number> = {};
+  votes.forEach(v => {
+    if (v.target_id) {
+      voteCount[v.target_id] = (voteCount[v.target_id] || 0) + 1;
+    }
+  });
+
+  // Filter targets based on role - mafia cannot target other mafia
+  const getSelectablePlayers = () => {
+    if (isNight) {
+      if (currentRole === 'mafia') {
+        // Mafia can only target non-mafia players
+        return players.filter(p => p.role !== 'mafia' && p.is_alive);
+      } else if (currentRole === 'doctor' || currentRole === 'detective') {
+        return players.filter(p => p.is_alive);
+      }
+    }
+    if (isVoting) {
+      return players.filter(p => p.is_alive && p.id !== currentPlayerId);
+    }
+    return [];
+  };
+
+  const selectablePlayers = getSelectablePlayers();
+  const selectableIds = new Set(selectablePlayers.map(p => p.id));
+
+  const getActionButton = (player: RoomPlayer & { player: Player }) => {
+    const isMe = player.id === currentPlayerId;
+    const isSelected = player.id === selectedTargetId;
+    const isSelectable = canSelect && selectableIds.has(player.id) && !isMe;
+
+    if (!player.is_alive) return null;
+    if (isMe) return null;
+    if (!canSelect) return null;
+    if (!isSelectable) return null;
+
+    if (isNight && currentRole) {
+      const actionConfig: Record<string, { label: string; icon: React.ReactNode; variant: string }> = {
+        mafia: { label: 'Kill', icon: <Target className="w-4 h-4" />, variant: 'destructive' },
+        doctor: { label: 'Save', icon: <Shield className="w-4 h-4" />, variant: 'default' },
+        detective: { label: 'Check', icon: <Search className="w-4 h-4" />, variant: 'secondary' },
+      };
+
+      const config = actionConfig[currentRole];
+      if (!config) return null;
+
+      return (
+        <Button
+          size="sm"
+          variant={isSelected ? 'default' : 'outline'}
+          disabled={isSelected}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmTarget({ id: player.id, name: player.player.nickname });
+          }}
+          className={cn(
+            'min-w-[80px]',
+            isSelected && 'bg-primary'
+          )}
+        >
+          {isSelected ? (
+            <>
+              <Check className="w-4 h-4 mr-1" />
+              Done
+            </>
+          ) : (
+            <>
+              {config.icon}
+              <span className="ml-1">{config.label}</span>
+            </>
+          )}
+        </Button>
+      );
+    }
+
+    if (isVoting) {
+      return (
+        <Button
+          size="sm"
+          variant={isSelected ? 'default' : 'outline'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(player.id);
+          }}
+          className="min-w-[80px]"
+        >
+          {isSelected ? (
+            <>
+              <Check className="w-4 h-4 mr-1" />
+              Voted
+            </>
+          ) : (
+            'Vote'
+          )}
+        </Button>
+      );
+    }
+
+    return null;
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmTarget) {
+      onSelect(confirmTarget.id);
+      setConfirmTarget(null);
+    }
+  };
+
+  return (
+    <>
+      <div className="glass-card rounded-lg p-4">
+        <h3 className="font-display text-lg mb-4 flex items-center gap-2">
+          <Target className="w-5 h-5" />
+          Players
+        </h3>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/50 text-left">
+                <th className="pb-3 font-display text-muted-foreground text-sm">Player</th>
+                <th className="pb-3 font-display text-muted-foreground text-sm">Status</th>
+                {isVoting && (
+                  <th className="pb-3 font-display text-muted-foreground text-sm text-center">Votes</th>
+                )}
+                {canSelect && (
+                  <th className="pb-3 font-display text-muted-foreground text-sm text-right">Action</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+            {players.map((player) => {
+                const isMe = player.id === currentPlayerId;
+                const isSelected = player.id === selectedTargetId;
+                const isMafiaPartner = isNight && isMafia && player.role === 'mafia' && !isMe;
+                const showAsMafia = isNight && isMafia && player.role === 'mafia';
+                const votesReceived = voteCount[player.id] || 0;
+
+                return (
+                  <tr
+                    key={player.id}
+                    className={cn(
+                      'border-b border-border/20 transition-colors',
+                      !player.is_alive && 'opacity-50',
+                      isSelected && 'bg-primary/10',
+                      isMe && 'bg-accent/10',
+                      isMafiaPartner && 'bg-mafia/5'
+                    )}
+                  >
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'font-body font-semibold',
+                            !player.is_alive && 'line-through text-muted-foreground',
+                            showAsMafia && 'text-mafia'
+                          )}
+                        >
+                          {player.player.nickname}
+                        </span>
+                        {isMe && (
+                          <Badge variant="outline" className="text-xs">
+                            <User className="w-3 h-3 mr-1" />
+                            You
+                          </Badge>
+                        )}
+                        {isMafiaPartner && (
+                          <Badge className="bg-mafia/20 text-mafia border-mafia/30 text-xs">
+                            <Skull className="w-3 h-3 mr-1" />
+                            Ally
+                          </Badge>
+                        )}
+                        {showAsMafia && isMe && (
+                          <Badge className="bg-mafia text-mafia-foreground text-xs">
+                            Mafia
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4">
+                      {player.is_alive ? (
+                        <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30">
+                          Alive
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-destructive/20 text-destructive border-destructive/30">
+                          <Skull className="w-3 h-3 mr-1" />
+                          Dead
+                        </Badge>
+                      )}
+                    </td>
+                    {isVoting && (
+                      <td className="py-3 text-center">
+                        {player.is_alive && votesReceived > 0 && (
+                          <Badge variant="destructive">
+                            {votesReceived}
+                          </Badge>
+                        )}
+                      </td>
+                    )}
+                    {canSelect && (
+                      <td className="py-3 text-right">
+                        {getActionButton(player)}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {confirmTarget && currentRole && ['mafia', 'doctor', 'detective'].includes(currentRole) && (
+        <ActionConfirmDialog
+          open={!!confirmTarget}
+          onOpenChange={(open) => !open && setConfirmTarget(null)}
+          onConfirm={handleConfirmAction}
+          role={currentRole}
+          targetName={confirmTarget.name}
+        />
+      )}
+    </>
+  );
+}

@@ -88,12 +88,21 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   }, [roomId, fetchVotes]);
 
   // Check if all night actors have completed their actions (for action_complete mode)
-  const checkAllNightActionsComplete = useCallback(() => {
-    if (!gameState || !room || !roomPlayers || room.night_mode !== 'action_complete') return false;
+  // This is called automatically by the game state updates (mafia/doctor/detective target IDs)
+  const checkAllNightActionsComplete = useCallback(async () => {
+    if (!gameState || !room || !roomId || room.night_mode !== 'action_complete') return false;
     if (gameState.phase !== 'night') return false;
     if (advancingPhaseRef.current) return false;
 
-    const alivePlayers = roomPlayers.filter(p => p.is_alive);
+    // Fetch fresh player data with roles to check who needs to act
+    const { data: freshPlayers, error } = await supabase
+      .from('room_players')
+      .select('id, is_alive, role')
+      .eq('room_id', roomId);
+
+    if (error || !freshPlayers) return false;
+
+    const alivePlayers = freshPlayers.filter(p => p.is_alive);
     
     // Check if there's at least one alive mafia and they have acted
     const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
@@ -108,20 +117,26 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     const detectiveActed = aliveDetectives.length === 0 || gameState.detective_target_id !== null;
 
     return mafiaActed && doctorActed && detectiveActed;
-  }, [gameState, room, roomPlayers]);
+  }, [gameState, room, roomId]);
 
   // Auto-advance when all actions complete in action_complete mode
   useEffect(() => {
-    if (checkAllNightActionsComplete() && roomPlayers && !advancingPhaseRef.current) {
-      advancingPhaseRef.current = true;
-      // Small delay to ensure all state updates are reflected
-      const timeout = setTimeout(() => {
-        advancePhase(roomPlayers).finally(() => {
-          advancingPhaseRef.current = false;
-        });
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
+    const checkAndAdvance = async () => {
+      if (advancingPhaseRef.current) return;
+      
+      const allComplete = await checkAllNightActionsComplete();
+      if (allComplete && roomPlayers && !advancingPhaseRef.current) {
+        advancingPhaseRef.current = true;
+        // Small delay to ensure all state updates are reflected
+        setTimeout(() => {
+          advancePhase(roomPlayers).finally(() => {
+            advancingPhaseRef.current = false;
+          });
+        }, 500);
+      }
+    };
+    
+    checkAndAdvance();
   }, [gameState?.mafia_target_id, gameState?.doctor_target_id, gameState?.detective_target_id, checkAllNightActionsComplete, roomPlayers]);
 
   async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number; night_mode: string; night_duration?: number; day_duration?: number }) {
@@ -215,10 +230,19 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }[role];
 
     // For detective, also set the result immediately for instant feedback
+    // We need to fetch the actual role from the database since it's hidden in the safe view
     let additionalUpdates: Record<string, string | null> = {};
-    if (role === 'detective' && target) {
-      const isMafia = target.role === 'mafia';
-      additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
+    if (role === 'detective') {
+      const { data: targetPlayer } = await supabase
+        .from('room_players')
+        .select('role')
+        .eq('id', targetId)
+        .single();
+      
+      if (targetPlayer) {
+        const isMafia = targetPlayer.role === 'mafia';
+        additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
+      }
     }
 
     // Add target name for spectator visibility
@@ -271,11 +295,22 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[]) {
     if (!gameState || !roomId) return;
 
-    const alivePlayers = roomPlayers.filter(p => p.is_alive);
+    // Refetch room_players to get the latest is_alive status
+    const { data: freshPlayers, error: fetchError } = await supabase
+      .from('room_players')
+      .select('id, is_alive, role')
+      .eq('room_id', roomId);
+
+    if (fetchError) {
+      console.error('Error fetching players for win check:', fetchError);
+      return;
+    }
+
+    const alivePlayers = freshPlayers?.filter(p => p.is_alive) || [];
     const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
     const aliveTown = alivePlayers.filter(p => p.role !== 'mafia');
 
-    // Check win conditions
+    // Check win conditions - only based on actual eliminations
     if (aliveMafia.length === 0) {
       await endGame('civilians');
       return;
@@ -346,7 +381,17 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
     const mafiaTarget = gameState.mafia_target_id;
     const doctorTarget = gameState.doctor_target_id;
-    const detectiveTarget = gameState.detective_target_id;
+
+    // Fetch fresh player data with roles for death messages
+    const { data: freshPlayers, error } = await supabase
+      .from('room_players')
+      .select('id, role, player:players(nickname)')
+      .eq('room_id', roomId);
+
+    if (error) {
+      console.error('Error fetching players for night resolution:', error);
+      return;
+    }
 
     // Handle mafia kill
     if (mafiaTarget && mafiaTarget !== doctorTarget) {
@@ -355,27 +400,25 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         .update({ is_alive: false })
         .eq('id', mafiaTarget);
 
-      const victim = roomPlayers.find(p => p.id === mafiaTarget);
+      const victim = freshPlayers?.find(p => p.id === mafiaTarget);
       if (victim) {
         // Check if roles should be revealed on death
         const revealRole = room?.reveal_roles_on_death !== false;
         const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `☠️ ${victim.player.nickname} was found dead this morning.${roleText}`,
+          content: `☠️ ${nickname} was found dead this morning.${roleText}`,
           is_system: true,
         });
       }
     } else if (mafiaTarget && mafiaTarget === doctorTarget) {
-      const saved = roomPlayers.find(p => p.id === mafiaTarget);
-      if (saved) {
-        await supabase.from('messages').insert({
-          room_id: roomId,
-          content: `🏥 Someone was attacked last night, but the Doctor saved them!`,
-          is_system: true,
-        });
-      }
+      await supabase.from('messages').insert({
+        room_id: roomId,
+        content: `🏥 Someone was attacked last night, but the Doctor saved them!`,
+        is_system: true,
+      });
     } else {
       await supabase.from('messages').insert({
         room_id: roomId,
@@ -384,17 +427,8 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       });
     }
 
-    // Handle detective investigation
-    if (detectiveTarget) {
-      const target = roomPlayers.find(p => p.id === detectiveTarget);
-      if (target) {
-        const isMafia = target.role === 'mafia';
-        await supabase
-          .from('game_state')
-          .update({ detective_result: isMafia ? 'mafia' : 'not_mafia' })
-          .eq('id', gameState.id);
-      }
-    }
+    // Detective investigation result is already set in submitNightAction
+    // No need to update again here - it's just private info for the detective
   }
 
   async function resolveVoting(roomPlayers: (RoomPlayer & { player: Player })[]) {
@@ -429,15 +463,22 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         .update({ is_alive: false })
         .eq('id', eliminated);
 
-      const victim = roomPlayers.find(p => p.id === eliminated);
+      // Fetch fresh player data with roles for death message
+      const { data: freshPlayers, error } = await supabase
+        .from('room_players')
+        .select('id, role, player:players(nickname)')
+        .eq('room_id', roomId);
+
+      const victim = freshPlayers?.find(p => p.id === eliminated);
       if (victim) {
         // Check if roles should be revealed on death
         const revealRole = room?.reveal_roles_on_death !== false;
         const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `⚖️ The town has spoken. ${victim.player.nickname} has been eliminated.${roleText}`,
+          content: `⚖️ The town has spoken. ${nickname} has been eliminated.${roleText}`,
           is_system: true,
         });
       }

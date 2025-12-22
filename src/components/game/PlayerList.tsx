@@ -42,13 +42,18 @@ export function PlayerList({
   });
 
   // Filter targets based on role - mafia cannot target other mafia
+  // Doctor CAN target themselves (self-save is allowed)
   const getSelectablePlayers = () => {
     if (isNight) {
       if (currentRole === 'mafia') {
         // Mafia can only target non-mafia players
         return players.filter(p => p.role !== 'mafia' && p.is_alive);
-      } else if (currentRole === 'doctor' || currentRole === 'detective') {
+      } else if (currentRole === 'doctor') {
+        // Doctor can save anyone including themselves
         return players.filter(p => p.is_alive);
+      } else if (currentRole === 'detective') {
+        // Detective can investigate anyone except themselves
+        return players.filter(p => p.is_alive && p.id !== currentPlayerId);
       }
     }
     if (isVoting) {
@@ -63,10 +68,10 @@ export function PlayerList({
   const getActionButton = (player: RoomPlayer & { player: Player }) => {
     const isMe = player.id === currentPlayerId;
     const isSelected = player.id === selectedTargetId;
-    const isSelectable = canSelect && selectableIds.has(player.id) && !isMe;
+    // Doctor can select themselves, so we check selectableIds which already accounts for this
+    const isSelectable = canSelect && selectableIds.has(player.id);
 
     if (!player.is_alive) return null;
-    if (isMe) return null;
     if (!canSelect) return null;
     if (!isSelectable) return null;
 

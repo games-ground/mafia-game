@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateRoomCode } from '@/lib/room-code';
 import { Room, RoomPlayer, Player } from '@/types/game';
+import { toast } from 'sonner';
 
 export function useRoom(roomCode: string | null, playerId: string | null) {
   const [room, setRoom] = useState<Room | null>(null);
@@ -224,13 +225,90 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   async function kickPlayer(roomPlayerId: string) {
     if (!room || room.host_id !== playerId) return;
 
-    await supabase
+    // Find the player being kicked
+    const kickedPlayer = roomPlayers.find(rp => rp.id === roomPlayerId);
+    if (!kickedPlayer) return;
+
+    // Delete the room_player entry
+    const { error: deleteError } = await supabase
       .from('room_players')
       .delete()
       .eq('id', roomPlayerId);
+
+    if (deleteError) {
+      console.error('Error kicking player:', deleteError);
+      toast.error('Failed to kick player');
+      return;
+    }
+
+    // Add system message about the kick
+    await supabase.from('messages').insert({
+      room_id: room.id,
+      content: `🚪 ${kickedPlayer.player.nickname} was kicked from the game.`,
+      is_system: true,
+    });
+
+    // If game is in progress and kicked player was alive, recalculate win conditions
+    if (room.status === 'playing' && kickedPlayer.is_alive) {
+      // Get remaining alive players
+      const remainingPlayers = roomPlayers.filter(
+        rp => rp.id !== roomPlayerId && rp.is_alive
+      );
+      
+      const aliveMafia = remainingPlayers.filter(p => p.role === 'mafia');
+      const aliveTown = remainingPlayers.filter(p => p.role !== 'mafia');
+
+      // Check win conditions
+      if (aliveMafia.length === 0) {
+        // Civilians win
+        await endGameDueToKick('civilians');
+      } else if (aliveMafia.length >= aliveTown.length) {
+        // Mafia wins
+        await endGameDueToKick('mafia');
+      }
+    }
+
+    toast.success(`${kickedPlayer.player.nickname} was kicked`);
   }
 
-  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration'>>) {
+  async function endGameDueToKick(winner: 'mafia' | 'civilians') {
+    if (!room) return;
+
+    // Get game state
+    const { data: gameState } = await supabase
+      .from('game_state')
+      .select('id')
+      .eq('room_id', room.id)
+      .single();
+
+    if (!gameState) return;
+
+    await supabase
+      .from('game_state')
+      .update({
+        phase: 'game_over',
+        winner,
+        phase_end_time: null,
+      })
+      .eq('id', gameState.id);
+
+    await supabase
+      .from('rooms')
+      .update({ status: 'finished' })
+      .eq('id', room.id);
+
+    const winMessage = winner === 'mafia'
+      ? '🔪 The Mafia has taken over the town! Mafia wins!'
+      : '🎉 The town has eliminated all the Mafia! Civilians win!';
+
+    await supabase.from('messages').insert({
+      room_id: room.id,
+      content: winMessage,
+      is_system: true,
+    });
+  }
+
+  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
     if (!room || room.host_id !== playerId) return;
 
     const { error } = await supabase

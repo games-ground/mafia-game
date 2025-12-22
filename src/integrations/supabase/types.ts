@@ -80,6 +80,9 @@ export type Database = {
           detective_target_id: string | null
           doctor_target_id: string | null
           id: string
+          last_detective_target_name: string | null
+          last_doctor_target_name: string | null
+          last_mafia_target_name: string | null
           mafia_target_id: string | null
           phase: Database["public"]["Enums"]["game_phase"]
           phase_end_time: string | null
@@ -94,6 +97,9 @@ export type Database = {
           detective_target_id?: string | null
           doctor_target_id?: string | null
           id?: string
+          last_detective_target_name?: string | null
+          last_doctor_target_name?: string | null
+          last_mafia_target_name?: string | null
           mafia_target_id?: string | null
           phase?: Database["public"]["Enums"]["game_phase"]
           phase_end_time?: string | null
@@ -108,6 +114,9 @@ export type Database = {
           detective_target_id?: string | null
           doctor_target_id?: string | null
           id?: string
+          last_detective_target_name?: string | null
+          last_doctor_target_name?: string | null
+          last_mafia_target_name?: string | null
           mafia_target_id?: string | null
           phase?: Database["public"]["Enums"]["game_phase"]
           phase_end_time?: string | null
@@ -298,6 +307,8 @@ export type Database = {
           min_players: number
           night_duration: number | null
           night_mode: string
+          reveal_roles_on_death: boolean
+          show_vote_counts: boolean
           status: string
           updated_at: string
         }
@@ -314,6 +325,8 @@ export type Database = {
           min_players?: number
           night_duration?: number | null
           night_mode?: string
+          reveal_roles_on_death?: boolean
+          show_vote_counts?: boolean
           status?: string
           updated_at?: string
         }
@@ -330,6 +343,8 @@ export type Database = {
           min_players?: number
           night_duration?: number | null
           night_mode?: string
+          reveal_roles_on_death?: boolean
+          show_vote_counts?: boolean
           status?: string
           updated_at?: string
         }

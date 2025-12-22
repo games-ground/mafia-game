@@ -206,14 +206,24 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
     if (!updateField) return;
 
+    // Get target name for spectator mode
+    const target = roomPlayers.find(p => p.id === targetId);
+    const targetNameField = {
+      mafia: 'last_mafia_target_name',
+      doctor: 'last_doctor_target_name',
+      detective: 'last_detective_target_name',
+    }[role];
+
     // For detective, also set the result immediately for instant feedback
     let additionalUpdates: Record<string, string | null> = {};
-    if (role === 'detective') {
-      const target = roomPlayers.find(p => p.id === targetId);
-      if (target) {
-        const isMafia = target.role === 'mafia';
-        additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
-      }
+    if (role === 'detective' && target) {
+      const isMafia = target.role === 'mafia';
+      additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
+    }
+
+    // Add target name for spectator visibility
+    if (targetNameField && target) {
+      additionalUpdates[targetNameField] = target.player.nickname;
     }
 
     const { error } = await supabase
@@ -289,12 +299,19 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         doctor_target_id: null,
         detective_target_id: null,
         detective_result: null,
+        // Keep the target names for spectator view during day
       };
     } else if (gameState.phase === 'day_voting') {
       // Resolve voting
       await resolveVoting(roomPlayers);
       newPhase = 'night';
       newDayNumber = gameState.day_number + 1;
+      // Clear spectator names for new night
+      updates = {
+        last_mafia_target_name: null,
+        last_doctor_target_name: null,
+        last_detective_target_name: null,
+      };
     }
 
     // Determine phase end time based on night mode and room config
@@ -340,9 +357,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = roomPlayers.find(p => p.id === mafiaTarget);
       if (victim) {
+        // Check if roles should be revealed on death
+        const revealRole = room?.reveal_roles_on_death !== false;
+        const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `☠️ ${victim.player.nickname} was found dead this morning. They were a ${victim.role}.`,
+          content: `☠️ ${victim.player.nickname} was found dead this morning.${roleText}`,
           is_system: true,
         });
       }
@@ -410,9 +431,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = roomPlayers.find(p => p.id === eliminated);
       if (victim) {
+        // Check if roles should be revealed on death
+        const revealRole = room?.reveal_roles_on_death !== false;
+        const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `⚖️ The town has spoken. ${victim.player.nickname} has been eliminated. They were a ${victim.role}.`,
+          content: `⚖️ The town has spoken. ${victim.player.nickname} has been eliminated.${roleText}`,
           is_system: true,
         });
       }

@@ -1,14 +1,15 @@
 import { Vote, RoomPlayer, Player } from '@/types/game';
 import { Card, CardContent } from '@/components/ui/card';
-import { Check, Vote as VoteIcon } from 'lucide-react';
+import { Check, Vote as VoteIcon, EyeOff } from 'lucide-react';
 
 interface VotingPanelProps {
   hasVoted: boolean;
   votes: Vote[];
   alivePlayers: (RoomPlayer & { player: Player })[];
+  showVoteCounts?: boolean;
 }
 
-export function VotingPanel({ hasVoted, votes, alivePlayers }: VotingPanelProps) {
+export function VotingPanel({ hasVoted, votes, alivePlayers, showVoteCounts = true }: VotingPanelProps) {
   const votedCount = votes.length;
   const totalVoters = alivePlayers.length;
 
@@ -32,8 +33,17 @@ export function VotingPanel({ hasVoted, votes, alivePlayers }: VotingPanelProps)
             </div>
           </div>
           <div className="text-right">
-            <p className="font-display text-lg font-bold">{votedCount}/{totalVoters}</p>
-            <p className="text-xs text-muted-foreground">votes cast</p>
+            {showVoteCounts ? (
+              <>
+                <p className="font-display text-lg font-bold">{votedCount}/{totalVoters}</p>
+                <p className="text-xs text-muted-foreground">votes cast</p>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <EyeOff className="w-4 h-4" />
+                <p className="text-xs">Votes hidden</p>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

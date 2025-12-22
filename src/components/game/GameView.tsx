@@ -7,6 +7,7 @@ import { VotingPanel } from './VotingPanel';
 import { ChatPanel } from './ChatPanel';
 import { RoleCard } from './RoleCard';
 import { RoleDisplay } from './RoleDisplay';
+import { SpectatorPanel } from './SpectatorPanel';
 
 interface GameViewProps {
   room: Room;
@@ -173,6 +174,16 @@ export function GameView({
                 hasVoted={!!selectedTarget}
                 votes={votes}
                 alivePlayers={alivePlayers}
+                showVoteCounts={room.show_vote_counts}
+              />
+            )}
+
+            {/* Dead Player Spectator Mode */}
+            {!isAlive && (
+              <SpectatorPanel
+                gameState={gameState}
+                roomPlayers={roomPlayers}
+                isNight={isNight}
               />
             )}
           </div>

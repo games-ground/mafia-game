@@ -32,8 +32,20 @@ export interface Room {
   night_mode: NightMode;
   night_duration: number;
   day_duration: number;
+  show_vote_counts: boolean;
+  reveal_roles_on_death: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// Recommended mafia count based on player count
+export function getRecommendedMafiaCount(playerCount: number): number {
+  if (playerCount <= 5) return 1;
+  if (playerCount <= 7) return 1;
+  if (playerCount <= 10) return 2;
+  if (playerCount <= 12) return 3;
+  if (playerCount <= 15) return 4;
+  return Math.floor(playerCount / 4);
 }
 
 export interface RoomPlayer {
@@ -58,6 +70,10 @@ export interface GameState {
   detective_target_id: string | null;
   detective_result: string | null;
   winner: string | null;
+  // Spectator mode info for dead players
+  last_mafia_target_name: string | null;
+  last_doctor_target_name: string | null;
+  last_detective_target_name: string | null;
   created_at: string;
   updated_at: string;
 }

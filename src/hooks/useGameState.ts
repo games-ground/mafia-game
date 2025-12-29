@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GameState, RoomPlayer, RoleType, Vote, Player, Room } from '@/types/game';
 
@@ -12,6 +12,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showVotingCountdown, setShowVotingCountdown] = useState(false);
   const advancingPhaseRef = useRef(false);
 
   const fetchGameState = useCallback(async () => {
@@ -402,9 +403,10 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === mafiaTarget);
       if (victim) {
-        // Check if roles should be revealed on death
+        // Check if roles should be revealed on death - only show Mafia or Civilian
         const revealRole = room?.reveal_roles_on_death !== false;
-        const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
+        const roleText = revealRole ? ` They were a ${displayRole}.` : '';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
@@ -471,9 +473,10 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === eliminated);
       if (victim) {
-        // Check if roles should be revealed on death
+        // Check if roles should be revealed on death - only show Mafia or Civilian
         const revealRole = room?.reveal_roles_on_death !== false;
-        const roleText = revealRole ? ` They were a ${victim.role}.` : '';
+        const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
+        const roleText = revealRole ? ` They were a ${displayRole}.` : '';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
@@ -519,14 +522,46 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }
 
+  // Check if all alive players have voted
+  const allVotesIn = useMemo(() => {
+    if (!gameState || gameState.phase !== 'day_voting' || !roomPlayers) return false;
+    const alivePlayers = roomPlayers.filter(p => p.is_alive);
+    return votes.length >= alivePlayers.length;
+  }, [gameState, roomPlayers, votes]);
+
+  // Trigger countdown when all votes are in
+  useEffect(() => {
+    if (allVotesIn && gameState?.phase === 'day_voting' && !showVotingCountdown && !advancingPhaseRef.current) {
+      setShowVotingCountdown(true);
+    }
+  }, [allVotesIn, gameState?.phase, showVotingCountdown]);
+
+  // Reset countdown on phase change
+  useEffect(() => {
+    setShowVotingCountdown(false);
+  }, [gameState?.phase]);
+
+  const handleVotingCountdownComplete = useCallback(() => {
+    if (roomPlayers && !advancingPhaseRef.current) {
+      advancingPhaseRef.current = true;
+      advancePhase(roomPlayers).finally(() => {
+        advancingPhaseRef.current = false;
+        setShowVotingCountdown(false);
+      });
+    }
+  }, [roomPlayers]);
+
   return {
     gameState,
     votes,
     loading,
+    showVotingCountdown,
+    allVotesIn,
     startGame,
     submitNightAction,
     submitVote,
     advancePhase,
+    handleVotingCountdownComplete,
     refetch: fetchGameState,
   };
 }

@@ -42,19 +42,33 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
   useEffect(() => {
     if (!roomId) return;
 
+    // Create a unique channel name to avoid duplicates
+    const channelName = `messages-${roomId}-${Date.now()}`;
     const channel = supabase
-      .channel(`messages-${roomId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
-        () => fetchMessages()
+        (payload) => {
+          // Directly add new message instead of refetching to avoid duplicates
+          const newMessage = payload.new as Message;
+          setMessages(prev => {
+            // Check if message already exists
+            if (prev.some(m => m.id === newMessage.id)) {
+              return prev;
+            }
+            // Fetch the full message with player info
+            fetchMessages();
+            return prev;
+          });
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, fetchMessages]);
+  }, [roomId, isMafia]);
 
   async function sendMessage(content: string, playerId: string, isMafiaOnly: boolean = false) {
     if (!roomId || !content.trim()) return;

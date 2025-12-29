@@ -1,19 +1,21 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Room, RoomPlayer, Player, NightMode } from '@/types/game';
-import { Copy, Crown, UserMinus, Users, Check } from 'lucide-react';
+import { Copy, Crown, UserMinus, Users, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { GameConfig } from './GameConfig';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 interface LobbyViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
   currentRoomPlayer: RoomPlayer | null;
   isHost: boolean;
-  onToggleReady: () => void;
-  onKickPlayer: (roomPlayerId: string) => void;
-  onStartGame: () => void;
+  onToggleReady: () => Promise<void> | void;
+  onKickPlayer: (roomPlayerId: string) => Promise<void> | void;
+  onStartGame: () => Promise<void> | void;
   onLeave: () => void;
   onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration'>>) => void;
 }
@@ -29,6 +31,36 @@ export function LobbyView({
   onLeave,
   onUpdateConfig,
 }: LobbyViewProps) {
+  const [isReadyLoading, setIsReadyLoading] = useState(false);
+  const [isStartLoading, setIsStartLoading] = useState(false);
+  const [kickingPlayerId, setKickingPlayerId] = useState<string | null>(null);
+  
+  const handleToggleReady = async () => {
+    setIsReadyLoading(true);
+    try {
+      await onToggleReady();
+    } finally {
+      setIsReadyLoading(false);
+    }
+  };
+  
+  const handleStartGame = async () => {
+    setIsStartLoading(true);
+    try {
+      await onStartGame();
+    } finally {
+      setIsStartLoading(false);
+    }
+  };
+  
+  const handleKickPlayer = async (roomPlayerId: string) => {
+    setKickingPlayerId(roomPlayerId);
+    try {
+      await onKickPlayer(roomPlayerId);
+    } finally {
+      setKickingPlayerId(null);
+    }
+  };
   const copyRoomCode = async () => {
     try {
       await navigator.clipboard.writeText(room.code);
@@ -115,10 +147,15 @@ export function LobbyView({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onKickPlayer(rp.id)}
+                          onClick={() => handleKickPlayer(rp.id)}
+                          disabled={kickingPlayerId === rp.id}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
-                          <UserMinus className="w-4 h-4" />
+                          {kickingPlayerId === rp.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <UserMinus className="w-4 h-4" />
+                          )}
                         </Button>
                       )}
                     </div>
@@ -140,23 +177,37 @@ export function LobbyView({
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             {isHost ? (
-              <Button
-                onClick={onStartGame}
+              <LoadingButton
+                onClick={handleStartGame}
                 disabled={!canStart}
+                loading={isStartLoading}
+                loadingText="Starting..."
                 className="w-full hover-glow"
                 size="lg"
               >
                 {canStart ? 'Start Game' : roomPlayers.length < room.min_players ? `Need ${room.min_players - roomPlayers.length} more player${room.min_players - roomPlayers.length > 1 ? 's' : ''}` : 'Waiting for players to ready up...'}
-              </Button>
+              </LoadingButton>
+            ) : !currentRoomPlayer ? (
+              <LoadingButton
+                loading={true}
+                loadingText="Joining room..."
+                className="w-full"
+                size="lg"
+                disabled
+              >
+                Joining...
+              </LoadingButton>
             ) : (
-              <Button
-                onClick={onToggleReady}
+              <LoadingButton
+                onClick={handleToggleReady}
                 variant={currentRoomPlayer?.is_ready ? 'secondary' : 'default'}
+                loading={isReadyLoading}
+                loadingText={currentRoomPlayer?.is_ready ? 'Cancelling...' : 'Readying up...'}
                 className="w-full hover-glow"
                 size="lg"
               >
                 {currentRoomPlayer?.is_ready ? 'Cancel Ready' : 'Ready Up'}
-              </Button>
+              </LoadingButton>
             )}
             
             <Button

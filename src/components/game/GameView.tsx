@@ -8,6 +8,7 @@ import { ChatPanel } from './ChatPanel';
 import { RoleCard } from './RoleCard';
 import { RoleDisplay } from './RoleDisplay';
 import { SpectatorPanel } from './SpectatorPanel';
+import { CountdownOverlay } from './CountdownOverlay';
 
 interface GameViewProps {
   room: Room;
@@ -19,6 +20,8 @@ interface GameViewProps {
   onVote: (targetId: string | null) => void;
   onAdvancePhase: () => void;
   isHost: boolean;
+  showVotingCountdown?: boolean;
+  onVotingCountdownComplete?: () => void;
 }
 
 export function GameView({
@@ -31,6 +34,8 @@ export function GameView({
   onVote,
   onAdvancePhase,
   isHost,
+  showVotingCountdown,
+  onVotingCountdownComplete,
 }: GameViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -121,6 +126,15 @@ export function GameView({
   return (
     <div className={`min-h-screen relative transition-all duration-1000 ${isNight ? 'bg-gradient-night' : 'bg-gradient-day'}`}>
       <div className="fog-overlay" />
+      
+      {/* Voting Countdown Overlay */}
+      {showVotingCountdown && onVotingCountdownComplete && isHost && (
+        <CountdownOverlay 
+          seconds={3} 
+          onComplete={onVotingCountdownComplete}
+          message="All votes are in!"
+        />
+      )}
       
       {/* Role Reveal Overlay */}
       {showRole && role && (

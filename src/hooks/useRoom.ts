@@ -8,6 +8,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   const [room, setRoom] = useState<Room | null>(null);
   const [roomPlayers, setRoomPlayers] = useState<(RoomPlayer & { player: Player })[]>([]);
   const [currentRoomPlayer, setCurrentRoomPlayer] = useState<RoomPlayer | null>(null);
+  const [mafiaPartnerIds, setMafiaPartnerIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +36,9 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   }, [roomCode]);
 
   const fetchRoomPlayers = async (roomId: string) => {
+    // Use the safe view that hides roles appropriately
     const { data, error } = await supabase
-      .from('room_players')
+      .from('room_players_safe')
       .select(`
         *,
         player:players(*)
@@ -50,17 +52,52 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     }
 
     const typedData = data as unknown as (RoomPlayer & { player: Player })[];
-    setRoomPlayers(typedData);
-
+    
+    // For the current player, fetch their own role and mafia partners using secure RPCs
     if (playerId) {
-      const current = typedData.find(rp => rp.player_id === playerId);
+      const [roleResult, partnersResult] = await Promise.all([
+        supabase.rpc('get_own_role', { p_player_id: playerId, p_room_id: roomId }),
+        supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_room_id: roomId }),
+      ]);
+      
+      const ownRole = roleResult.data;
+      const partners = partnersResult.data as { room_player_id: string; partner_player_id: string; nickname: string }[] | null;
+      
+      // Store mafia partner IDs
+      const partnerIds = new Set<string>(partners?.map(p => p.room_player_id) || []);
+      setMafiaPartnerIds(partnerIds);
+      
+      // Update the current player's role in the data
+      // For mafia partners, also set their role so they show correctly
+      const updatedData = typedData.map(rp => {
+        if (rp.player_id === playerId && ownRole) {
+          return { ...rp, role: ownRole as RoomPlayer['role'] };
+        }
+        // Mark mafia partners with their role for display purposes
+        if (partnerIds.has(rp.id)) {
+          return { ...rp, role: 'mafia' as RoomPlayer['role'] };
+        }
+        return rp;
+      });
+      
+      setRoomPlayers(updatedData);
+      const current = updatedData.find(rp => rp.player_id === playerId);
       setCurrentRoomPlayer(current || null);
+    } else {
+      setRoomPlayers(typedData);
     }
   };
 
   useEffect(() => {
     fetchRoom();
   }, [fetchRoom]);
+
+  // Refetch room players when playerId changes (needed for getting roles after game start)
+  useEffect(() => {
+    if (room && playerId) {
+      fetchRoomPlayers(room.id);
+    }
+  }, [room?.id, playerId]);
 
   useEffect(() => {
     if (!room) return;
@@ -70,7 +107,9 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${room.id}` },
-        () => fetchRoomPlayers(room.id)
+        () => {
+          fetchRoomPlayers(room.id);
+        }
       )
       .on(
         'postgres_changes',
@@ -86,7 +125,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [room?.id]);
+  }, [room?.id, playerId]);
 
   async function createRoom(hostId: string): Promise<string | null> {
     const code = generateRoomCode();
@@ -223,20 +262,22 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   }
 
   async function kickPlayer(roomPlayerId: string) {
-    if (!room || room.host_id !== playerId) return;
+    if (!room || !playerId) return;
 
     // Find the player being kicked
     const kickedPlayer = roomPlayers.find(rp => rp.id === roomPlayerId);
     if (!kickedPlayer) return;
 
-    // Delete the room_player entry
-    const { error: deleteError } = await supabase
-      .from('room_players')
-      .delete()
-      .eq('id', roomPlayerId);
+    // Use the secure RPC to kick player (server validates host)
+    const { error: kickError } = await supabase
+      .rpc('kick_player', {
+        p_host_player_id: playerId,
+        p_room_id: room.id,
+        p_target_room_player_id: roomPlayerId,
+      });
 
-    if (deleteError) {
-      console.error('Error kicking player:', deleteError);
+    if (kickError) {
+      console.error('Error kicking player:', kickError);
       toast.error('Failed to kick player');
       return;
     }
@@ -309,12 +350,22 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   }
 
   async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
-    if (!room || room.host_id !== playerId) return;
+    if (!room || !playerId) return;
 
+    // Use the secure RPC to update config (server validates host)
     const { error } = await supabase
-      .from('rooms')
-      .update(config)
-      .eq('id', room.id);
+      .rpc('update_room_config', {
+        p_host_player_id: playerId,
+        p_room_id: room.id,
+        p_mafia_count: config.mafia_count ?? null,
+        p_doctor_count: config.doctor_count ?? null,
+        p_detective_count: config.detective_count ?? null,
+        p_night_mode: config.night_mode ?? null,
+        p_day_duration: config.day_duration ?? null,
+        p_night_duration: config.night_duration ?? null,
+        p_show_vote_counts: config.show_vote_counts ?? null,
+        p_reveal_roles_on_death: config.reveal_roles_on_death ?? null,
+      });
 
     if (error) {
       console.error('Error updating room config:', error);
@@ -325,6 +376,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     room,
     roomPlayers,
     currentRoomPlayer,
+    mafiaPartnerIds,
     loading,
     error,
     createRoom,

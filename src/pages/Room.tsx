@@ -7,6 +7,9 @@ import { LobbyView } from '@/components/game/LobbyView';
 import { GameView } from '@/components/game/GameView';
 import { GameOverView } from '@/components/game/GameOverView';
 import { NicknamePrompt } from '@/components/game/NicknamePrompt';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 export default function Room() {
   const { code } = useParams<{ code: string }>();
@@ -31,10 +34,13 @@ export default function Room() {
   const { 
     gameState, 
     votes,
+    loading: gameLoading,
+    showVotingCountdown,
     startGame, 
     submitNightAction,
     submitVote,
     advancePhase,
+    handleVotingCountdownComplete,
   } = useGameState(room?.id || null, currentRoomPlayer?.id || null, room, roomPlayers);
 
   // Check if we need to show nickname prompt for direct room joins
@@ -64,8 +70,43 @@ export default function Room() {
 
   if (playerLoading || roomLoading) {
     return (
-      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
-        <div className="animate-pulse text-foreground font-display text-2xl">Loading...</div>
+      <div className="min-h-screen bg-gradient-dark relative">
+        <div className="fog-overlay" />
+        <div className="relative z-10 container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto">
+            {/* Room Code Loading */}
+            <div className="text-center mb-8 animate-fade-in">
+              <p className="text-muted-foreground text-sm mb-2">ROOM CODE</p>
+              <Skeleton className="h-12 w-48 mx-auto mb-2" />
+              <Skeleton className="h-4 w-64 mx-auto" />
+            </div>
+            
+            {/* Players Loading */}
+            <Card className="glass-card mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-6 w-24" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-16" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Button Loading */}
+            <div className="flex flex-col gap-3">
+              <div className="w-full h-11 bg-primary/50 rounded-lg flex items-center justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-primary-foreground" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -123,6 +164,8 @@ export default function Room() {
         onVote={submitVote}
         onAdvancePhase={() => advancePhase(roomPlayers)}
         isHost={isHost}
+        showVotingCountdown={showVotingCountdown}
+        onVotingCountdownComplete={handleVotingCountdownComplete}
       />
     );
   }

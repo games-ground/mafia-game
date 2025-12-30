@@ -127,11 +127,15 @@ export function GameView({
     <div className={`min-h-screen relative transition-all duration-1000 ${isNight ? 'bg-gradient-night' : 'bg-gradient-day'}`}>
       <div className="fog-overlay" />
       
-      {/* Voting Countdown Overlay */}
-      {showVotingCountdown && onVotingCountdownComplete && isHost && (
+      {/* Voting Countdown Overlay - show for all but only host triggers advance */}
+      {showVotingCountdown && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={onVotingCountdownComplete}
+          onComplete={() => {
+            if (isHost && onVotingCountdownComplete) {
+              onVotingCountdownComplete();
+            }
+          }}
           message="All votes are in!"
         />
       )}

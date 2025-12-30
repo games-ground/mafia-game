@@ -37,6 +37,7 @@ export default function Room() {
     loading: gameLoading,
     showVotingCountdown,
     startGame, 
+    restartGame,
     submitNightAction,
     submitVote,
     advancePhase,
@@ -144,10 +145,19 @@ export default function Room() {
         gameState={gameState}
         roomPlayers={roomPlayers}
         currentRoomPlayer={currentRoomPlayer}
+        isHost={isHost}
         onLeave={() => {
           leaveRoom();
           navigate('/');
         }}
+        onRestart={() => restartGame(roomPlayers, {
+          mafia_count: room.mafia_count,
+          doctor_count: room.doctor_count,
+          detective_count: room.detective_count,
+          night_mode: room.night_mode,
+          night_duration: room.night_duration,
+          day_duration: room.day_duration,
+        })}
       />
     );
   }

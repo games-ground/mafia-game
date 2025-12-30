@@ -173,6 +173,7 @@ export function GameView({
               canSelect={canAct}
               onSelect={handleTargetSelect}
               currentRole={role}
+              showVoteCounts={room.show_vote_counts}
             />
 
             {/* Phase-specific instructions */}

@@ -2,20 +2,24 @@ import { GameState, RoomPlayer, Player } from '@/types/game';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Skull, Home } from 'lucide-react';
+import { Trophy, Skull, Home, RotateCcw } from 'lucide-react';
 
 interface GameOverViewProps {
   gameState: GameState;
   roomPlayers: (RoomPlayer & { player: Player })[];
   currentRoomPlayer: RoomPlayer | null;
+  isHost: boolean;
   onLeave: () => void;
+  onRestart: () => void;
 }
 
 export function GameOverView({
   gameState,
   roomPlayers,
   currentRoomPlayer,
+  isHost,
   onLeave,
+  onRestart,
 }: GameOverViewProps) {
   const isMafiaWin = gameState.winner === 'mafia';
   const playerWon = currentRoomPlayer && (
@@ -113,10 +117,24 @@ export function GameOverView({
           </Card>
         </div>
 
-        <Button onClick={onLeave} size="lg" className="hover-glow">
-          <Home className="w-5 h-5 mr-2" />
-          Back to Home
-        </Button>
+        <div className="flex gap-4">
+          {isHost && (
+            <Button onClick={onRestart} size="lg" variant="secondary" className="hover-glow">
+              <RotateCcw className="w-5 h-5 mr-2" />
+              Play Again
+            </Button>
+          )}
+          <Button onClick={onLeave} size="lg" className="hover-glow">
+            <Home className="w-5 h-5 mr-2" />
+            Back to Home
+          </Button>
+        </div>
+        
+        {!isHost && (
+          <p className="text-sm text-muted-foreground mt-4">
+            Waiting for host to restart the game...
+          </p>
+        )}
       </div>
     </div>
   );

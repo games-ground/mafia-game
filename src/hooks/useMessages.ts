@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, RoomPlayer, Player } from '@/types/game';
 
 export function useMessages(roomId: string | null, isMafia: boolean) {
   const [messages, setMessages] = useState<(Message & { room_player?: RoomPlayer & { player: Player } })[]>([]);
+  const seenIds = useRef<Set<string>>(new Set());
 
   const fetchMessages = useCallback(async () => {
     if (!roomId) return;
@@ -32,6 +33,8 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
       return;
     }
 
+    // Update seen IDs and set messages
+    seenIds.current = new Set((data || []).map(m => m.id));
     setMessages(data as any);
   }, [roomId, isMafia]);
 
@@ -42,24 +45,47 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
   useEffect(() => {
     if (!roomId) return;
 
-    // Create a unique channel name to avoid duplicates
-    const channelName = `messages-${roomId}-${Date.now()}`;
     const channel = supabase
-      .channel(channelName)
+      .channel(`messages-${roomId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          // Directly add new message instead of refetching to avoid duplicates
+        async (payload) => {
           const newMessage = payload.new as Message;
+          
+          // Skip if already seen
+          if (seenIds.current.has(newMessage.id)) {
+            return;
+          }
+          
+          // Skip mafia messages if user is not mafia
+          if (!isMafia && newMessage.is_mafia_only) {
+            return;
+          }
+          
+          seenIds.current.add(newMessage.id);
+          
+          // Fetch full message with player info
+          const { data, error } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              room_player:room_players(
+                *,
+                player:players(*)
+              )
+            `)
+            .eq('id', newMessage.id)
+            .single();
+          
+          if (error || !data) return;
+          
           setMessages(prev => {
-            // Check if message already exists
+            // Double-check for duplicates
             if (prev.some(m => m.id === newMessage.id)) {
               return prev;
             }
-            // Fetch the full message with player info
-            fetchMessages();
-            return prev;
+            return [...prev, data as any];
           });
         }
       )

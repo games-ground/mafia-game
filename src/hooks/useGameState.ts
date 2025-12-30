@@ -296,7 +296,33 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[]) {
     if (!gameState || !roomId) return;
 
-    // Refetch room_players to get the latest is_alive status
+    let newPhase = gameState.phase;
+    let newDayNumber = gameState.day_number;
+    let updates: Partial<GameState> = {};
+
+    if (gameState.phase === 'night') {
+      // Resolve night actions FIRST
+      await resolveNightActions(roomPlayers);
+      newPhase = 'day_voting';
+      updates = {
+        mafia_target_id: null,
+        doctor_target_id: null,
+        detective_target_id: null,
+        detective_result: null,
+      };
+    } else if (gameState.phase === 'day_voting') {
+      // Resolve voting FIRST
+      await resolveVoting(roomPlayers);
+      newPhase = 'night';
+      newDayNumber = gameState.day_number + 1;
+      updates = {
+        last_mafia_target_name: null,
+        last_doctor_target_name: null,
+        last_detective_target_name: null,
+      };
+    }
+
+    // AFTER resolving actions, check win conditions with fresh data
     const { data: freshPlayers, error: fetchError } = await supabase
       .from('room_players')
       .select('id, is_alive, role')
@@ -311,7 +337,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
     const aliveTown = alivePlayers.filter(p => p.role !== 'mafia');
 
-    // Check win conditions - only based on actual eliminations
+    // Check win conditions after actions resolved
     if (aliveMafia.length === 0) {
       await endGame('civilians');
       return;
@@ -319,35 +345,6 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     if (aliveMafia.length >= aliveTown.length) {
       await endGame('mafia');
       return;
-    }
-
-    let newPhase = gameState.phase;
-    let newDayNumber = gameState.day_number;
-    let updates: Partial<GameState> = {};
-
-    if (gameState.phase === 'night') {
-      // Resolve night actions
-      await resolveNightActions(roomPlayers);
-      // Skip day_discussion, go directly to voting
-      newPhase = 'day_voting';
-      updates = {
-        mafia_target_id: null,
-        doctor_target_id: null,
-        detective_target_id: null,
-        detective_result: null,
-        // Keep the target names for spectator view during day
-      };
-    } else if (gameState.phase === 'day_voting') {
-      // Resolve voting
-      await resolveVoting(roomPlayers);
-      newPhase = 'night';
-      newDayNumber = gameState.day_number + 1;
-      // Clear spectator names for new night
-      updates = {
-        last_mafia_target_name: null,
-        last_doctor_target_name: null,
-        last_detective_target_name: null,
-      };
     }
 
     // Determine phase end time based on night mode and room config
@@ -522,6 +519,47 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }
 
+  async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number; night_mode: string; night_duration?: number; day_duration?: number }) {
+    if (!roomId || !gameState) return;
+
+    // Delete old game state
+    await supabase
+      .from('game_state')
+      .delete()
+      .eq('room_id', roomId);
+
+    // Reset all players: make alive, remove roles, set not ready
+    for (const player of roomPlayers) {
+      await supabase
+        .from('room_players')
+        .update({ is_alive: true, role: null, is_ready: false })
+        .eq('id', player.id);
+    }
+
+    // Delete old votes
+    await supabase
+      .from('votes')
+      .delete()
+      .eq('room_id', roomId);
+
+    // Update room status back to waiting
+    await supabase
+      .from('rooms')
+      .update({ status: 'waiting' })
+      .eq('id', roomId);
+
+    // Add system message
+    await supabase.from('messages').insert({
+      room_id: roomId,
+      content: '🔄 Game has been reset. Waiting for players to ready up...',
+      is_system: true,
+    });
+
+    // Clear local state
+    setGameState(null);
+    setVotes([]);
+  }
+
   // Check if all alive players have voted
   const allVotesIn = useMemo(() => {
     if (!gameState || gameState.phase !== 'day_voting' || !roomPlayers) return false;
@@ -558,6 +596,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     showVotingCountdown,
     allVotesIn,
     startGame,
+    restartGame,
     submitNightAction,
     submitVote,
     advancePhase,

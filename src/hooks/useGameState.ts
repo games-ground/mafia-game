@@ -295,83 +295,94 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
   async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[]) {
     if (!gameState || !roomId) return;
-
-    let newPhase = gameState.phase;
-    let newDayNumber = gameState.day_number;
-    let updates: Partial<GameState> = {};
-
-    if (gameState.phase === 'night') {
-      // Resolve night actions FIRST
-      await resolveNightActions(roomPlayers);
-      newPhase = 'day_voting';
-      updates = {
-        mafia_target_id: null,
-        doctor_target_id: null,
-        detective_target_id: null,
-        detective_result: null,
-      };
-    } else if (gameState.phase === 'day_voting') {
-      // Resolve voting FIRST
-      await resolveVoting(roomPlayers);
-      newPhase = 'night';
-      newDayNumber = gameState.day_number + 1;
-      updates = {
-        last_mafia_target_name: null,
-        last_doctor_target_name: null,
-        last_detective_target_name: null,
-      };
-    }
-
-    // AFTER resolving actions, check win conditions with fresh data
-    const { data: freshPlayers, error: fetchError } = await supabase
-      .from('room_players')
-      .select('id, is_alive, role')
-      .eq('room_id', roomId);
-
-    if (fetchError) {
-      console.error('Error fetching players for win check:', fetchError);
+    
+    // Prevent concurrent phase advances
+    if (advancingPhaseRef.current) {
+      console.log('Already advancing phase, skipping');
       return;
     }
+    advancingPhaseRef.current = true;
 
-    const alivePlayers = freshPlayers?.filter(p => p.is_alive) || [];
-    const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
-    const aliveTown = alivePlayers.filter(p => p.role !== 'mafia');
+    try {
+      let newPhase = gameState.phase;
+      let newDayNumber = gameState.day_number;
+      let updates: Partial<GameState> = {};
 
-    // Check win conditions after actions resolved
-    if (aliveMafia.length === 0) {
-      await endGame('civilians');
-      return;
-    }
-    if (aliveMafia.length >= aliveTown.length) {
-      await endGame('mafia');
-      return;
-    }
-
-    // Determine phase end time based on night mode and room config
-    let phaseEndTime: string | null;
-    if (newPhase === 'night' && room?.night_mode === 'action_complete') {
-      phaseEndTime = null; // No timer for action-based night
-    } else {
-      let phaseDuration: number;
-      if (newPhase === 'night') {
-        phaseDuration = room?.night_duration || DEFAULT_PHASE_DURATIONS.night;
-      } else if (newPhase === 'day_voting') {
-        phaseDuration = room?.day_duration || DEFAULT_PHASE_DURATIONS.day_voting;
-      } else {
-        phaseDuration = DEFAULT_PHASE_DURATIONS[newPhase as keyof typeof DEFAULT_PHASE_DURATIONS] || 30;
+      if (gameState.phase === 'night') {
+        // Resolve night actions FIRST
+        await resolveNightActions(roomPlayers);
+        newPhase = 'day_voting';
+        updates = {
+          mafia_target_id: null,
+          doctor_target_id: null,
+          detective_target_id: null,
+          detective_result: null,
+        };
+      } else if (gameState.phase === 'day_voting') {
+        // Resolve voting FIRST
+        await resolveVoting(roomPlayers);
+        newPhase = 'night';
+        newDayNumber = gameState.day_number + 1;
+        updates = {
+          last_mafia_target_name: null,
+          last_doctor_target_name: null,
+          last_detective_target_name: null,
+        };
       }
-      phaseEndTime = new Date(Date.now() + phaseDuration * 1000).toISOString();
-    }
 
-    await supabase
-      .from('game_state')
-      .update({
-        phase: newPhase,
-        day_number: newDayNumber,
-        phase_end_time: phaseEndTime,
-        ...updates,
-      })
-      .eq('id', gameState.id);
+      // AFTER resolving actions, check win conditions with fresh data
+      const { data: freshPlayers, error: fetchError } = await supabase
+        .from('room_players')
+        .select('id, is_alive, role')
+        .eq('room_id', roomId);
+
+      if (fetchError) {
+        console.error('Error fetching players for win check:', fetchError);
+        return;
+      }
+
+      const alivePlayers = freshPlayers?.filter(p => p.is_alive) || [];
+      const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
+      const aliveTown = alivePlayers.filter(p => p.role !== 'mafia');
+
+      // Check win conditions after actions resolved
+      if (aliveMafia.length === 0) {
+        await endGame('civilians');
+        return;
+      }
+      if (aliveMafia.length >= aliveTown.length) {
+        await endGame('mafia');
+        return;
+      }
+
+      // Determine phase end time based on night mode and room config
+      let phaseEndTime: string | null;
+      if (newPhase === 'night' && room?.night_mode === 'action_complete') {
+        phaseEndTime = null; // No timer for action-based night
+      } else {
+        let phaseDuration: number;
+        if (newPhase === 'night') {
+          phaseDuration = room?.night_duration || DEFAULT_PHASE_DURATIONS.night;
+        } else if (newPhase === 'day_voting') {
+          phaseDuration = room?.day_duration || DEFAULT_PHASE_DURATIONS.day_voting;
+        } else {
+          phaseDuration = DEFAULT_PHASE_DURATIONS[newPhase as keyof typeof DEFAULT_PHASE_DURATIONS] || 30;
+        }
+        phaseEndTime = new Date(Date.now() + phaseDuration * 1000).toISOString();
+      }
+
+      await supabase
+        .from('game_state')
+        .update({
+          phase: newPhase,
+          day_number: newDayNumber,
+          phase_end_time: phaseEndTime,
+          ...updates,
+        })
+        .eq('id', gameState.id);
+    } finally {
+      advancingPhaseRef.current = false;
+    }
   }
 
   async function resolveNightActions(roomPlayers: (RoomPlayer & { player: Player })[]) {
@@ -433,9 +444,21 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   async function resolveVoting(roomPlayers: (RoomPlayer & { player: Player })[]) {
     if (!gameState || !roomId) return;
 
+    // Fetch fresh votes from database instead of using stale state
+    const { data: freshVotes, error: votesError } = await supabase
+      .from('votes')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('day_number', gameState.day_number);
+
+    if (votesError) {
+      console.error('Error fetching votes for resolution:', votesError);
+      return;
+    }
+
     // Count votes
     const voteCounts: Record<string, number> = {};
-    for (const vote of votes) {
+    for (const vote of (freshVotes || [])) {
       if (vote.target_id) {
         voteCounts[vote.target_id] = (voteCounts[vote.target_id] || 0) + 1;
       }
@@ -567,7 +590,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     return votes.length >= alivePlayers.length;
   }, [gameState, roomPlayers, votes]);
 
-  // Trigger countdown when all votes are in
+  // Trigger countdown when all votes are in - only for host to prevent multiple advances
   useEffect(() => {
     if (allVotesIn && gameState?.phase === 'day_voting' && !showVotingCountdown && !advancingPhaseRef.current) {
       setShowVotingCountdown(true);
@@ -576,18 +599,16 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
   // Reset countdown on phase change
   useEffect(() => {
-    setShowVotingCountdown(false);
-  }, [gameState?.phase]);
-
-  const handleVotingCountdownComplete = useCallback(() => {
-    if (roomPlayers && !advancingPhaseRef.current) {
-      advancingPhaseRef.current = true;
-      advancePhase(roomPlayers).finally(() => {
-        advancingPhaseRef.current = false;
-        setShowVotingCountdown(false);
-      });
+    if (showVotingCountdown) {
+      setShowVotingCountdown(false);
     }
-  }, [roomPlayers]);
+  }, [gameState?.phase, gameState?.day_number]);
+
+  const handleVotingCountdownComplete = useCallback(async () => {
+    if (!roomPlayers) return;
+    setShowVotingCountdown(false);
+    await advancePhase(roomPlayers);
+  }, [roomPlayers, advancePhase]);
 
   return {
     gameState,

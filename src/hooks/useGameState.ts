@@ -12,8 +12,16 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [loading, setLoading] = useState(true);
-const [showVotingCountdown, setShowVotingCountdown] = useState(false);
+
+  const [showVotingCountdown, setShowVotingCountdown] = useState(false);
   const [showNightCountdown, setShowNightCountdown] = useState(false);
+
+  const [nightActionRequirements, setNightActionRequirements] = useState<{
+    mafia: boolean;
+    doctor: boolean;
+    detective: boolean;
+  } | null>(null);
+
   const advancingPhaseRef = useRef(false);
 
   const fetchGameState = useCallback(async () => {
@@ -89,32 +97,62 @@ const [showVotingCountdown, setShowVotingCountdown] = useState(false);
     };
   }, [roomId, fetchVotes]);
 
-  // Check if all night actions are complete and trigger countdown (for all clients to see)
+  // In action-complete night mode, determine which roles are still alive (don't rely on room_players_safe roles)
+  useEffect(() => {
+    if (!roomId || !gameState || !room || room.night_mode !== 'action_complete' || gameState.phase !== 'night') {
+      setNightActionRequirements(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('room_players')
+        .select('role, is_alive')
+        .eq('room_id', roomId);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error('Error fetching night action requirements:', error);
+        setNightActionRequirements(null);
+        return;
+      }
+
+      const alive = (data || []).filter((p: any) => p.is_alive);
+      setNightActionRequirements({
+        mafia: alive.some((p: any) => p.role === 'mafia'),
+        doctor: alive.some((p: any) => p.role === 'doctor'),
+        detective: alive.some((p: any) => p.role === 'detective'),
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, gameState?.phase, gameState?.day_number, room?.night_mode]);
+
   const allNightActionsComplete = useMemo(() => {
     if (!gameState || !room || room.night_mode !== 'action_complete') return false;
     if (gameState.phase !== 'night') return false;
-    if (!roomPlayers) return false;
+    if (!nightActionRequirements) return false;
 
-    const alivePlayers = roomPlayers.filter(p => p.is_alive);
-    
-    // Check if there's at least one alive mafia and they have acted
-    const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
-    const mafiaActed = aliveMafia.length === 0 || gameState.mafia_target_id !== null;
-
-    // Check if there's at least one alive doctor and they have acted
-    const aliveDoctors = alivePlayers.filter(p => p.role === 'doctor');
-    const doctorActed = aliveDoctors.length === 0 || gameState.doctor_target_id !== null;
-
-    // Check if there's at least one alive detective and they have acted
-    const aliveDetectives = alivePlayers.filter(p => p.role === 'detective');
-    const detectiveActed = aliveDetectives.length === 0 || gameState.detective_target_id !== null;
+    const mafiaActed = !nightActionRequirements.mafia || gameState.mafia_target_id !== null;
+    const doctorActed = !nightActionRequirements.doctor || gameState.doctor_target_id !== null;
+    const detectiveActed = !nightActionRequirements.detective || gameState.detective_target_id !== null;
 
     return mafiaActed && doctorActed && detectiveActed;
-  }, [gameState, room, roomPlayers]);
+  }, [gameState, room, nightActionRequirements]);
 
-  // Trigger countdown when all night actions are complete
+  // Trigger countdown when all required night actions are complete
   useEffect(() => {
-    if (allNightActionsComplete && gameState?.phase === 'night' && !showNightCountdown && !advancingPhaseRef.current) {
+    if (
+      allNightActionsComplete &&
+      gameState?.phase === 'night' &&
+      !showNightCountdown &&
+      !advancingPhaseRef.current
+    ) {
       setShowNightCountdown(true);
     }
   }, [allNightActionsComplete, gameState?.phase, showNightCountdown]);
@@ -582,15 +620,17 @@ const [showVotingCountdown, setShowVotingCountdown] = useState(false);
     setShowNightCountdown(false);
   }, [gameState?.phase, gameState?.day_number]);
 
-  const handleVotingCountdownComplete = useCallback(async () => {
-    if (!roomPlayers || advancingPhaseRef.current) return;
+  const handleVotingCountdownComplete = useCallback(async (shouldAdvance: boolean) => {
     setShowVotingCountdown(false);
+    if (!shouldAdvance) return;
+    if (!roomPlayers || advancingPhaseRef.current) return;
     await advancePhase(roomPlayers);
   }, [roomPlayers, advancePhase]);
 
-  const handleNightCountdownComplete = useCallback(async () => {
-    if (!roomPlayers || advancingPhaseRef.current) return;
+  const handleNightCountdownComplete = useCallback(async (shouldAdvance: boolean) => {
     setShowNightCountdown(false);
+    if (!shouldAdvance) return;
+    if (!roomPlayers || advancingPhaseRef.current) return;
     await advancePhase(roomPlayers);
   }, [roomPlayers, advancePhase]);
 

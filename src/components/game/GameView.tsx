@@ -21,9 +21,9 @@ interface GameViewProps {
   onAdvancePhase: () => void;
   isHost: boolean;
   showVotingCountdown?: boolean;
-  onVotingCountdownComplete?: () => void;
+  onVotingCountdownComplete?: (shouldAdvance: boolean) => void;
   showNightCountdown?: boolean;
-  onNightCountdownComplete?: () => void;
+  onNightCountdownComplete?: (shouldAdvance: boolean) => void;
 }
 
 export function GameView({
@@ -131,28 +131,20 @@ export function GameView({
     <div className={`min-h-screen relative transition-all duration-1000 ${isNight ? 'bg-gradient-night' : 'bg-gradient-day'}`}>
       <div className="fog-overlay" />
       
-      {/* Night Countdown Overlay - show for all but only host triggers advance */}
+      {/* Night Countdown Overlay - show for all; only host advances */}
       {showNightCountdown && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={() => {
-            if (isHost && onNightCountdownComplete) {
-              onNightCountdownComplete();
-            }
-          }}
+          onComplete={() => onNightCountdownComplete?.(isHost)}
           message="All night actions complete!"
         />
       )}
       
-      {/* Voting Countdown Overlay - show for all but only host triggers advance */}
+      {/* Voting Countdown Overlay - show for all; only host advances */}
       {showVotingCountdown && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={() => {
-            if (isHost && onVotingCountdownComplete) {
-              onVotingCountdownComplete();
-            }
-          }}
+          onComplete={() => onVotingCountdownComplete?.(isHost)}
           message="All votes are in!"
         />
       )}

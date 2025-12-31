@@ -22,6 +22,8 @@ interface GameViewProps {
   isHost: boolean;
   showVotingCountdown?: boolean;
   onVotingCountdownComplete?: () => void;
+  showNightCountdown?: boolean;
+  onNightCountdownComplete?: () => void;
 }
 
 export function GameView({
@@ -36,6 +38,8 @@ export function GameView({
   isHost,
   showVotingCountdown,
   onVotingCountdownComplete,
+  showNightCountdown,
+  onNightCountdownComplete,
 }: GameViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -126,6 +130,19 @@ export function GameView({
   return (
     <div className={`min-h-screen relative transition-all duration-1000 ${isNight ? 'bg-gradient-night' : 'bg-gradient-day'}`}>
       <div className="fog-overlay" />
+      
+      {/* Night Countdown Overlay - show for all but only host triggers advance */}
+      {showNightCountdown && (
+        <CountdownOverlay 
+          seconds={3} 
+          onComplete={() => {
+            if (isHost && onNightCountdownComplete) {
+              onNightCountdownComplete();
+            }
+          }}
+          message="All night actions complete!"
+        />
+      )}
       
       {/* Voting Countdown Overlay - show for all but only host triggers advance */}
       {showVotingCountdown && (

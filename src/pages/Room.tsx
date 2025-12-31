@@ -36,12 +36,14 @@ export default function Room() {
     votes,
     loading: gameLoading,
     showVotingCountdown,
+    showNightCountdown,
     startGame, 
     restartGame,
     submitNightAction,
     submitVote,
     advancePhase,
     handleVotingCountdownComplete,
+    handleNightCountdownComplete,
   } = useGameState(room?.id || null, currentRoomPlayer?.id || null, room, roomPlayers);
 
   // Check if we need to show nickname prompt for direct room joins
@@ -176,6 +178,8 @@ export default function Room() {
         isHost={isHost}
         showVotingCountdown={showVotingCountdown}
         onVotingCountdownComplete={handleVotingCountdownComplete}
+        showNightCountdown={showNightCountdown}
+        onNightCountdownComplete={handleNightCountdownComplete}
       />
     );
   }

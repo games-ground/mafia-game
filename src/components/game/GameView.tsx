@@ -42,7 +42,6 @@ export function GameView({
   onNightCountdownComplete,
 }: GameViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
   const [showRole, setShowRole] = useState(true);
   const [detectiveResult, setDetectiveResult] = useState<string | null>(null);
 
@@ -50,9 +49,6 @@ export function GameView({
   const isVoting = gameState.phase === 'day_voting';
   const isAlive = currentRoomPlayer.is_alive;
   const role = currentRoomPlayer.role;
-
-  // Check if timer should be shown
-  const showTimer = room.night_mode === 'timed' || gameState.phase === 'day_voting';
 
   // Reset selected target when phase changes
   useEffect(() => {
@@ -75,29 +71,6 @@ export function GameView({
       }
     }
   }, [isNight, role, gameState.day_number, gameState.detective_target_id]);
-
-  // Timer countdown
-  useEffect(() => {
-    if (!gameState.phase_end_time) {
-      setTimeLeft(0);
-      return;
-    }
-
-    const updateTimer = () => {
-      const endTime = new Date(gameState.phase_end_time!).getTime();
-      const now = Date.now();
-      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-      setTimeLeft(remaining);
-
-      if (remaining === 0 && isHost) {
-        onAdvancePhase();
-      }
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [gameState.phase_end_time, isHost, onAdvancePhase]);
 
   // Hide role card after 5 seconds
   useEffect(() => {
@@ -157,12 +130,12 @@ export function GameView({
       )}
 
       <div className="relative z-10 container mx-auto px-4 py-4 min-h-screen flex flex-col">
-        {/* Phase Header - Always at top */}
+        {/* Phase Header - Always at top, no timer */}
         <PhaseHeader
           phase={gameState.phase}
           dayNumber={gameState.day_number}
-          timeLeft={timeLeft}
-          showTimer={showTimer}
+          timeLeft={0}
+          showTimer={false}
           detectiveResult={detectiveResult}
           role={role}
         />
@@ -186,7 +159,6 @@ export function GameView({
               canSelect={canAct}
               onSelect={handleTargetSelect}
               currentRole={role}
-              showVoteCounts={room.show_vote_counts}
             />
 
             {/* Phase-specific instructions */}
@@ -202,7 +174,6 @@ export function GameView({
                 hasVoted={!!selectedTarget}
                 votes={votes}
                 alivePlayers={alivePlayers}
-                showVoteCounts={room.show_vote_counts}
               />
             )}
 

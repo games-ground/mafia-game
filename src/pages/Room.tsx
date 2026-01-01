@@ -156,9 +156,6 @@ export default function Room() {
           mafia_count: room.mafia_count,
           doctor_count: room.doctor_count,
           detective_count: room.detective_count,
-          night_mode: room.night_mode,
-          night_duration: room.night_duration,
-          day_duration: room.day_duration,
         })}
       />
     );
@@ -196,9 +193,6 @@ export default function Room() {
         mafia_count: room.mafia_count,
         doctor_count: room.doctor_count,
         detective_count: room.detective_count,
-        night_mode: room.night_mode,
-        night_duration: room.night_duration,
-        day_duration: room.day_duration,
       })}
       onLeave={() => {
         leaveRoom();

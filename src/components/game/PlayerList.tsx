@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RoomPlayer, Vote, GamePhase, RoleType, Player, ROLE_INFO } from '@/types/game';
+import { RoomPlayer, Vote, GamePhase, RoleType, Player } from '@/types/game';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skull, User, Check, Target, Shield, Search, ThumbsUp } from 'lucide-react';
@@ -15,7 +15,6 @@ interface PlayerListProps {
   canSelect: boolean;
   onSelect: (playerId: string) => void;
   currentRole: RoleType | null;
-  showVoteCounts?: boolean;
 }
 
 export function PlayerList({
@@ -27,7 +26,6 @@ export function PlayerList({
   canSelect,
   onSelect,
   currentRole,
-  showVoteCounts = true,
 }: PlayerListProps) {
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
   
@@ -35,15 +33,10 @@ export function PlayerList({
   const isVoting = phase === 'day_voting';
   const isMafia = currentRole === 'mafia';
 
-  // Count votes per player (only used when showVoteCounts is true)
-  const voteCount: Record<string, number> = {};
-  // Track who has voted (for thumbs up display when vote counts hidden)
+  // Track who has voted (for thumbs up display)
   const votersSet = new Set<string>();
   votes.forEach(v => {
     votersSet.add(v.voter_id);
-    if (v.target_id) {
-      voteCount[v.target_id] = (voteCount[v.target_id] || 0) + 1;
-    }
   });
 
   // Filter targets based on role - mafia cannot target other mafia
@@ -71,7 +64,6 @@ export function PlayerList({
   const selectableIds = new Set(selectablePlayers.map(p => p.id));
 
   const getActionButton = (player: RoomPlayer & { player: Player }) => {
-    const isMe = player.id === currentPlayerId;
     const isSelected = player.id === selectedTargetId;
     // Doctor can select themselves, so we check selectableIds which already accounts for this
     const isSelectable = canSelect && selectableIds.has(player.id);
@@ -166,10 +158,7 @@ export function PlayerList({
               <tr className="border-b border-border/50 text-left">
                 <th className="pb-3 font-display text-muted-foreground text-sm">Player</th>
                 <th className="pb-3 font-display text-muted-foreground text-sm">Status</th>
-                {isVoting && showVoteCounts && (
-                  <th className="pb-3 font-display text-muted-foreground text-sm text-center">Votes</th>
-                )}
-                {isVoting && !showVoteCounts && (
+                {isVoting && (
                   <th className="pb-3 font-display text-muted-foreground text-sm text-center">Voted</th>
                 )}
                 {canSelect && (
@@ -183,7 +172,7 @@ export function PlayerList({
                 const isSelected = player.id === selectedTargetId;
                 const isMafiaPartner = isNight && isMafia && player.role === 'mafia' && !isMe;
                 const showAsMafia = isNight && isMafia && player.role === 'mafia';
-                const votesReceived = voteCount[player.id] || 0;
+                const hasVoted = votersSet.has(player.id);
 
                 return (
                   <tr
@@ -238,18 +227,9 @@ export function PlayerList({
                         </Badge>
                       )}
                     </td>
-                    {isVoting && showVoteCounts && (
+                    {isVoting && (
                       <td className="py-3 text-center">
-                        {player.is_alive && votesReceived > 0 && (
-                          <Badge variant="destructive">
-                            {votesReceived}
-                          </Badge>
-                        )}
-                      </td>
-                    )}
-                    {isVoting && !showVoteCounts && (
-                      <td className="py-3 text-center">
-                        {player.is_alive && votersSet.has(player.id) && (
+                        {player.is_alive && hasVoted && (
                           <ThumbsUp className="w-4 h-4 text-success mx-auto" />
                         )}
                       </td>

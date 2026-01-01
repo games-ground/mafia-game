@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Room, RoomPlayer, Player, NightMode } from '@/types/game';
+import { Room, RoomPlayer, Player } from '@/types/game';
 import { Copy, Crown, UserMinus, Users, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { GameConfig } from './GameConfig';
@@ -17,7 +17,7 @@ interface LobbyViewProps {
   onKickPlayer: (roomPlayerId: string) => Promise<void> | void;
   onStartGame: () => Promise<void> | void;
   onLeave: () => void;
-  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration'>>) => void;
+  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count'>>) => void;
 }
 
 export function LobbyView({

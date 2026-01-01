@@ -1,18 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Settings, Users, Clock, Zap, Minus, Plus, Eye, EyeOff, Skull, AlertCircle } from 'lucide-react';
-import { Room, NightMode, getRecommendedMafiaCount } from '@/types/game';
+import { Settings, Users, Minus, Plus, AlertCircle } from 'lucide-react';
+import { Room, getRecommendedMafiaCount } from '@/types/game';
 import { Badge } from '@/components/ui/badge';
 import { useEffect } from 'react';
 
 interface GameConfigProps {
   room: Room;
   playerCount: number;
-  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) => void;
+  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count'>>) => void;
 }
 
 export function GameConfig({ room, playerCount, onUpdateConfig }: GameConfigProps) {
@@ -44,15 +41,6 @@ export function GameConfig({ room, playerCount, onUpdateConfig }: GameConfigProp
     if (room[field] > minValue) {
       onUpdateConfig({ [field]: room[field] - 1 });
     }
-  };
-
-  const formatDuration = (seconds: number) => {
-    if (seconds >= 60) {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-    }
-    return `${seconds}s`;
   };
 
   // Check if configuration is balanced
@@ -172,142 +160,12 @@ export function GameConfig({ room, playerCount, onUpdateConfig }: GameConfigProp
           </div>
         </div>
 
-        {/* Voting Visibility Toggle */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            Voting Options
-          </Label>
-          
-          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50">
-            <div className="flex items-center gap-3">
-              {room.show_vote_counts ? (
-                <Eye className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <EyeOff className="w-4 h-4 text-muted-foreground" />
-              )}
-              <div>
-                <p className="font-medium text-sm">Show Vote Counts</p>
-                <p className="text-xs text-muted-foreground">
-                  {room.show_vote_counts 
-                    ? 'Players see live vote counts' 
-                    : 'Votes hidden until voting ends'}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={room.show_vote_counts}
-              onCheckedChange={(checked) => onUpdateConfig({ show_vote_counts: checked })}
-            />
-          </div>
+        {/* Game Rules Info */}
+        <div className="p-3 rounded-lg bg-secondary/30 border border-border/30 text-sm text-muted-foreground space-y-1">
+          <p>• Night ends when all roles complete their action</p>
+          <p>• Eliminated player roles are always revealed</p>
+          <p>• Voting shows who voted, not vote counts</p>
         </div>
-
-        {/* Role Reveal Toggle */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-2">
-            <Skull className="w-4 h-4" />
-            Death Reveal
-          </Label>
-          
-          <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50">
-            <div className="flex items-center gap-3">
-              <Skull className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="font-medium text-sm">Reveal Roles on Death</p>
-                <p className="text-xs text-muted-foreground">
-                  {room.reveal_roles_on_death 
-                    ? 'Roles shown when eliminated' 
-                    : 'Roles hidden until game ends'}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={room.reveal_roles_on_death}
-              onCheckedChange={(checked) => onUpdateConfig({ reveal_roles_on_death: checked })}
-            />
-          </div>
-        </div>
-
-        {/* Night Mode */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Night Phase Mode</Label>
-          <RadioGroup
-            value={room.night_mode}
-            onValueChange={(value: NightMode) => onUpdateConfig({ night_mode: value })}
-            className="space-y-2"
-          >
-            <div className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/50 border border-border/50">
-              <RadioGroupItem value="timed" id="timed" />
-              <Label htmlFor="timed" className="flex items-center gap-2 cursor-pointer flex-1">
-                <Clock className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Timed</p>
-                  <p className="text-xs text-muted-foreground">Custom timer for each phase</p>
-                </div>
-              </Label>
-            </div>
-            <div className="flex items-center space-x-3 p-3 rounded-lg bg-secondary/50 border border-border/50">
-              <RadioGroupItem value="action_complete" id="action_complete" />
-              <Label htmlFor="action_complete" className="flex items-center gap-2 cursor-pointer flex-1">
-                <Zap className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Action Complete</p>
-                  <p className="text-xs text-muted-foreground">Night ends when all roles act</p>
-                </div>
-              </Label>
-            </div>
-          </RadioGroup>
-        </div>
-
-        {/* Timer Duration (only for timed mode) */}
-        {room.night_mode === 'timed' && (
-          <div className="space-y-4 p-4 rounded-lg bg-secondary/30 border border-border/30">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              Phase Durations
-            </Label>
-            
-            {/* Night Duration */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Night Phase</span>
-                <span className="font-medium text-indigo-400">{formatDuration(room.night_duration)}</span>
-              </div>
-              <Slider
-                value={[room.night_duration]}
-                onValueChange={([value]) => onUpdateConfig({ night_duration: value })}
-                min={15}
-                max={120}
-                step={5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>15s</span>
-                <span>2m</span>
-              </div>
-            </div>
-
-            {/* Day Duration */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Day Phase (Voting)</span>
-                <span className="font-medium text-orange-400">{formatDuration(room.day_duration)}</span>
-              </div>
-              <Slider
-                value={[room.day_duration]}
-                onValueChange={([value]) => onUpdateConfig({ day_duration: value })}
-                min={30}
-                max={180}
-                step={10}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>30s</span>
-                <span>3m</span>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

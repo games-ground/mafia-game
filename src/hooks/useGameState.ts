@@ -2,12 +2,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GameState, RoomPlayer, RoleType, Vote, Player, Room } from '@/types/game';
 
-const DEFAULT_PHASE_DURATIONS = {
-  night: 30,
-  day_discussion: 60,
-  day_voting: 60,
-};
-
 export function useGameState(roomId: string | null, currentRoomPlayerId: string | null, room?: Room | null, roomPlayers?: (RoomPlayer & { player: Player })[]) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
@@ -15,12 +9,6 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
   const [showVotingCountdown, setShowVotingCountdown] = useState(false);
   const [showNightCountdown, setShowNightCountdown] = useState(false);
-
-  const [nightActionRequirements, setNightActionRequirements] = useState<{
-    mafia: boolean;
-    doctor: boolean;
-    detective: boolean;
-  } | null>(null);
 
   const advancingPhaseRef = useRef(false);
 
@@ -97,55 +85,25 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     };
   }, [roomId, fetchVotes]);
 
-  // In action-complete night mode, determine which roles are still alive (don't rely on room_players_safe roles)
-  useEffect(() => {
-    if (!roomId || !gameState || !room || room.night_mode !== 'action_complete' || gameState.phase !== 'night') {
-      setNightActionRequirements(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      const { data, error } = await supabase
-        .from('room_players')
-        .select('role, is_alive')
-        .eq('room_id', roomId);
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error('Error fetching night action requirements:', error);
-        setNightActionRequirements(null);
-        return;
-      }
-
-      const alive = (data || []).filter((p: any) => p.is_alive);
-      setNightActionRequirements({
-        mafia: alive.some((p: any) => p.role === 'mafia'),
-        doctor: alive.some((p: any) => p.role === 'doctor'),
-        detective: alive.some((p: any) => p.role === 'detective'),
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [roomId, gameState?.phase, gameState?.day_number, room?.night_mode]);
-
+  // Check if all night actions are complete (action-based mode only)
   const allNightActionsComplete = useMemo(() => {
-    if (!gameState || !room || room.night_mode !== 'action_complete') return false;
-    if (gameState.phase !== 'night') return false;
-    if (!nightActionRequirements) return false;
+    if (!gameState || gameState.phase !== 'night' || !roomPlayers) return false;
 
-    const mafiaActed = !nightActionRequirements.mafia || gameState.mafia_target_id !== null;
-    const doctorActed = !nightActionRequirements.doctor || gameState.doctor_target_id !== null;
-    const detectiveActed = !nightActionRequirements.detective || gameState.detective_target_id !== null;
+    // Get alive players with their roles
+    const alivePlayers = roomPlayers.filter(p => p.is_alive);
+    
+    const hasMafia = alivePlayers.some(p => p.role === 'mafia');
+    const hasDoctor = alivePlayers.some(p => p.role === 'doctor');
+    const hasDetective = alivePlayers.some(p => p.role === 'detective');
+
+    const mafiaActed = !hasMafia || gameState.mafia_target_id !== null;
+    const doctorActed = !hasDoctor || gameState.doctor_target_id !== null;
+    const detectiveActed = !hasDetective || gameState.detective_target_id !== null;
 
     return mafiaActed && doctorActed && detectiveActed;
-  }, [gameState, room, nightActionRequirements]);
+  }, [gameState, roomPlayers]);
 
-  // Trigger countdown when all required night actions are complete
+  // Trigger night countdown when all actions complete
   useEffect(() => {
     if (
       allNightActionsComplete &&
@@ -157,7 +115,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }, [allNightActionsComplete, gameState?.phase, showNightCountdown]);
 
-  async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number; night_mode: string; night_duration?: number; day_duration?: number }) {
+  async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
     if (!roomId) return;
 
     // Assign roles based on config
@@ -178,17 +136,12 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       .update({ status: 'playing' })
       .eq('id', roomId);
 
-    // Create game state - use timed or null for action_complete mode
-    const nightDuration = roomConfig.night_duration || DEFAULT_PHASE_DURATIONS.night;
-    const phaseEndTime = roomConfig.night_mode === 'timed' 
-      ? new Date(Date.now() + nightDuration * 1000).toISOString()
-      : null;
-
+    // Create game state - no phase_end_time since we're action-based only
     await supabase.from('game_state').insert({
       room_id: roomId,
       phase: 'night',
       day_number: 1,
-      phase_end_time: phaseEndTime,
+      phase_end_time: null,
     });
 
     // Add system message
@@ -248,7 +201,6 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }[role];
 
     // For detective, also set the result immediately for instant feedback
-    // We need to fetch the actual role from the database since it's hidden in the safe view
     let additionalUpdates: Record<string, string | null> = {};
     if (role === 'detective') {
       const { data: targetPlayer } = await supabase
@@ -372,28 +324,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         return;
       }
 
-      // Determine phase end time based on night mode and room config
-      let phaseEndTime: string | null;
-      if (newPhase === 'night' && room?.night_mode === 'action_complete') {
-        phaseEndTime = null; // No timer for action-based night
-      } else {
-        let phaseDuration: number;
-        if (newPhase === 'night') {
-          phaseDuration = room?.night_duration || DEFAULT_PHASE_DURATIONS.night;
-        } else if (newPhase === 'day_voting') {
-          phaseDuration = room?.day_duration || DEFAULT_PHASE_DURATIONS.day_voting;
-        } else {
-          phaseDuration = DEFAULT_PHASE_DURATIONS[newPhase as keyof typeof DEFAULT_PHASE_DURATIONS] || 30;
-        }
-        phaseEndTime = new Date(Date.now() + phaseDuration * 1000).toISOString();
-      }
-
+      // No phase_end_time since we're action-based only
       await supabase
         .from('game_state')
         .update({
           phase: newPhase,
           day_number: newDayNumber,
-          phase_end_time: phaseEndTime,
+          phase_end_time: null,
           ...updates,
         })
         .eq('id', gameState.id);
@@ -428,15 +365,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === mafiaTarget);
       if (victim) {
-        // Check if roles should be revealed on death - only show Mafia or Civilian
-        const revealRole = room?.reveal_roles_on_death !== false;
+        // Always reveal role on death - show Mafia or Civilian
         const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
-        const roleText = revealRole ? ` They were a ${displayRole}.` : '';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `☠️ ${nickname} was found dead this morning.${roleText}`,
+          content: `☠️ ${nickname} was found dead this morning. They were a ${displayRole}.`,
           is_system: true,
         });
       }
@@ -453,9 +388,6 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         is_system: true,
       });
     }
-
-    // Detective investigation result is already set in submitNightAction
-    // No need to update again here - it's just private info for the detective
   }
 
   async function resolveVoting(roomPlayers: (RoomPlayer & { player: Player })[]) {
@@ -510,15 +442,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === eliminated);
       if (victim) {
-        // Check if roles should be revealed on death - only show Mafia or Civilian
-        const revealRole = room?.reveal_roles_on_death !== false;
+        // Always reveal role on elimination - show Mafia or Civilian
         const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
-        const roleText = revealRole ? ` They were a ${displayRole}.` : '';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
         await supabase.from('messages').insert({
           room_id: roomId,
-          content: `⚖️ The town has spoken. ${nickname} has been eliminated.${roleText}`,
+          content: `⚖️ The town has spoken. ${nickname} has been eliminated. They were a ${displayRole}.`,
           is_system: true,
         });
       }
@@ -559,7 +489,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }
 
-  async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number; night_mode: string; night_duration?: number; day_duration?: number }) {
+  async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
     if (!roomId || !gameState) return;
 
     // Delete old game state
@@ -607,7 +537,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     return votes.length >= alivePlayers.length;
   }, [gameState, roomPlayers, votes]);
 
-  // Trigger countdown when all votes are in - only for host to prevent multiple advances
+  // Trigger countdown when all votes are in
   useEffect(() => {
     if (allVotesIn && gameState?.phase === 'day_voting' && !showVotingCountdown && !advancingPhaseRef.current) {
       setShowVotingCountdown(true);

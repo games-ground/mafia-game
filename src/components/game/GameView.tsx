@@ -43,7 +43,6 @@ export function GameView({
 }: GameViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [showRole, setShowRole] = useState(true);
-  const [detectiveResult, setDetectiveResult] = useState<string | null>(null);
 
   const isNight = gameState.phase === 'night';
   const isVoting = gameState.phase === 'day_voting';
@@ -54,23 +53,6 @@ export function GameView({
   useEffect(() => {
     setSelectedTarget(null);
   }, [gameState.phase]);
-
-  // Track detective result for immediate feedback
-  useEffect(() => {
-    if (role === 'detective' && gameState.detective_result) {
-      setDetectiveResult(gameState.detective_result);
-    }
-  }, [gameState.detective_result, role]);
-
-  // Clear detective result when entering a new night
-  useEffect(() => {
-    if (isNight && role === 'detective') {
-      // Only clear if we're starting a new night (no target selected yet)
-      if (!gameState.detective_target_id) {
-        setDetectiveResult(null);
-      }
-    }
-  }, [isNight, role, gameState.day_number, gameState.detective_target_id]);
 
   // Hide role card after 5 seconds
   useEffect(() => {
@@ -130,13 +112,13 @@ export function GameView({
       )}
 
       <div className="relative z-10 container mx-auto px-4 py-4 min-h-screen flex flex-col">
-        {/* Phase Header - Always at top, no timer */}
+        {/* Phase Header - Always at top, no timer, no detective result */}
         <PhaseHeader
           phase={gameState.phase}
           dayNumber={gameState.day_number}
           timeLeft={0}
           showTimer={false}
-          detectiveResult={detectiveResult}
+          detectiveResult={null}
           role={role}
         />
 

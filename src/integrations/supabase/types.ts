@@ -198,6 +198,7 @@ export type Database = {
           is_mafia_only: boolean
           is_system: boolean
           player_id: string | null
+          role_type: string | null
           room_id: string
         }
         Insert: {
@@ -207,6 +208,7 @@ export type Database = {
           is_mafia_only?: boolean
           is_system?: boolean
           player_id?: string | null
+          role_type?: string | null
           room_id: string
         }
         Update: {
@@ -216,6 +218,7 @@ export type Database = {
           is_mafia_only?: boolean
           is_system?: boolean
           player_id?: string | null
+          role_type?: string | null
           room_id?: string
         }
         Relationships: [

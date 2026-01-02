@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageCircle, Send, Skull } from 'lucide-react';
+import { MessageCircle, Send, Skull, Eye, Stethoscope, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RoleType } from '@/types/game';
 
 interface ChatPanelProps {
   roomId: string;
   currentRoomPlayerId: string;
-  isMafia: boolean;
+  currentRole: RoleType | null;
   isNight: boolean;
   isAlive: boolean;
 }
@@ -18,11 +19,11 @@ interface ChatPanelProps {
 export function ChatPanel({
   roomId,
   currentRoomPlayerId,
-  isMafia,
+  currentRole,
   isNight,
   isAlive,
 }: ChatPanelProps) {
-  const { messages, sendMessage } = useMessages(roomId, isMafia);
+  const { messages, sendMessage } = useMessages(roomId, currentRole, isNight);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -36,56 +37,102 @@ export function ChatPanel({
   const handleSend = () => {
     if (!input.trim() || !isAlive) return;
     
-    // During night, only mafia can send messages (mafia-only)
-    const isMafiaOnly = isNight && isMafia;
-    
+    // During night, only special roles can send messages (role-specific)
     // During day, everyone can send public messages
-    // During night, only mafia can chat (privately)
-    if (isNight && !isMafia) return;
-
-    sendMessage(input, currentRoomPlayerId, isMafiaOnly);
+    if (isNight) {
+      if (!currentRole || !['mafia', 'doctor', 'detective'].includes(currentRole)) return;
+      sendMessage(input, currentRoomPlayerId, currentRole);
+    } else {
+      // Day phase - public messages
+      sendMessage(input, currentRoomPlayerId, null);
+    }
     setInput('');
   };
 
-  const canChat = isAlive && (!isNight || isMafia);
+  const canChat = isAlive && (
+    !isNight || 
+    (currentRole && ['mafia', 'doctor', 'detective'].includes(currentRole))
+  );
+
+  // Get chat title and icon based on phase and role
+  const getChatInfo = () => {
+    if (!isNight) {
+      return { title: 'Town Chat', icon: Users, color: 'text-foreground' };
+    }
+    
+    switch (currentRole) {
+      case 'mafia':
+        return { title: 'Mafia Chat', icon: Skull, color: 'text-mafia' };
+      case 'detective':
+        return { title: 'Detective Chat', icon: Eye, color: 'text-detective' };
+      case 'doctor':
+        return { title: 'Doctor Chat', icon: Stethoscope, color: 'text-doctor' };
+      default:
+        return { title: 'Chat Disabled', icon: MessageCircle, color: 'text-muted-foreground' };
+    }
+  };
+
+  const chatInfo = getChatInfo();
+  const ChatIcon = chatInfo.icon;
+
+  // Get message styling based on role_type
+  const getMessageStyle = (roleType: string | null, isMafiaOnly: boolean) => {
+    if (roleType === 'mafia' || isMafiaOnly) return 'bg-mafia/20 border border-mafia/30';
+    if (roleType === 'detective') return 'bg-detective/20 border border-detective/30';
+    if (roleType === 'doctor') return 'bg-doctor/20 border border-doctor/30';
+    return 'bg-secondary/50';
+  };
+
+  const getRoleBadge = (roleType: string | null, isMafiaOnly: boolean) => {
+    if (roleType === 'mafia' || isMafiaOnly) return { label: 'Mafia', color: 'text-mafia' };
+    if (roleType === 'detective') return { label: 'Detective', color: 'text-detective' };
+    if (roleType === 'doctor') return { label: 'Doctor', color: 'text-doctor' };
+    return null;
+  };
 
   return (
     <Card className="glass-card h-full flex flex-col">
       <CardHeader className="pb-2">
-        <CardTitle className="font-display text-lg flex items-center gap-2">
-          <MessageCircle className="w-5 h-5" />
-          {isNight && isMafia ? 'Mafia Chat' : 'Town Chat'}
+        <CardTitle className={cn("font-display text-lg flex items-center gap-2", chatInfo.color)}>
+          <ChatIcon className="w-5 h-5" />
+          {chatInfo.title}
         </CardTitle>
-        {isNight && !isMafia && (
-          <p className="text-xs text-muted-foreground">Chat disabled at night</p>
+        {isNight && !canChat && (
+          <p className="text-xs text-muted-foreground">Civilians must stay silent at night</p>
+        )}
+        {isNight && canChat && currentRole && ['mafia', 'detective', 'doctor'].includes(currentRole) && (
+          <p className="text-xs text-muted-foreground">Only your team can see these messages</p>
         )}
       </CardHeader>
       <CardContent className="flex-1 flex flex-col min-h-0 pb-4">
         <ScrollArea className="flex-1 pr-4 mb-4" ref={scrollRef}>
           <div className="space-y-2">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  'p-2 rounded-lg text-sm',
-                  msg.is_system && 'bg-muted/50 text-muted-foreground italic text-center',
-                  msg.is_mafia_only && 'bg-mafia/20 border border-mafia/30',
-                  !msg.is_system && !msg.is_mafia_only && 'bg-secondary/50',
-                  msg.player_id === currentRoomPlayerId && 'ml-4'
-                )}
-              >
-                {!msg.is_system && msg.room_player && (
-                  <p className={cn(
-                    'font-semibold text-xs mb-1',
-                    msg.is_mafia_only && 'text-mafia'
-                  )}>
-                    {msg.room_player.player?.nickname || 'Unknown'}
-                    {msg.is_mafia_only && ' (Mafia)'}
-                  </p>
-                )}
-                <p className="break-words">{msg.content}</p>
-              </div>
-            ))}
+            {messages.map((msg) => {
+              const roleBadge = getRoleBadge(msg.role_type, msg.is_mafia_only);
+              
+              return (
+                <div
+                  key={msg.id}
+                  className={cn(
+                    'p-2 rounded-lg text-sm',
+                    msg.is_system && 'bg-muted/50 text-muted-foreground italic text-center',
+                    !msg.is_system && getMessageStyle(msg.role_type, msg.is_mafia_only),
+                    msg.player_id === currentRoomPlayerId && 'ml-4'
+                  )}
+                >
+                  {!msg.is_system && msg.room_player && (
+                    <p className={cn(
+                      'font-semibold text-xs mb-1',
+                      roleBadge?.color
+                    )}>
+                      {msg.room_player.player?.nickname || 'Unknown'}
+                      {roleBadge && ` (${roleBadge.label})`}
+                    </p>
+                  )}
+                  <p className="break-words">{msg.content}</p>
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
 
@@ -95,7 +142,7 @@ export function ChatPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isNight ? 'Mafia whisper...' : 'Send a message...'}
+              placeholder={isNight ? `${currentRole} whisper...` : 'Send a message...'}
               className="bg-input border-border"
               maxLength={200}
             />
@@ -106,7 +153,7 @@ export function ChatPanel({
         ) : (
           <div className="flex items-center justify-center gap-2 p-2 bg-muted/50 rounded-lg text-muted-foreground text-sm">
             <Skull className="w-4 h-4" />
-            {!isAlive ? 'Dead players cannot chat' : 'Chat disabled'}
+            {!isAlive ? 'Dead players cannot chat' : 'Chat disabled at night'}
           </div>
         )}
       </CardContent>

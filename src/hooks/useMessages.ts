@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, RoomPlayer, Player } from '@/types/game';
+import { Message, RoomPlayer, Player, RoleType } from '@/types/game';
 
-export function useMessages(roomId: string | null, isMafia: boolean) {
+export function useMessages(roomId: string | null, currentRole: RoleType | null, isNight: boolean) {
   const [messages, setMessages] = useState<(Message & { room_player?: RoomPlayer & { player: Player } })[]>([]);
   const seenIds = useRef<Set<string>>(new Set());
 
   const fetchMessages = useCallback(async () => {
     if (!roomId) return;
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('messages')
       .select(`
         *,
@@ -21,13 +21,6 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
       .eq('room_id', roomId)
       .order('created_at', { ascending: true });
 
-    // If not mafia, filter out mafia-only messages
-    if (!isMafia) {
-      query = query.eq('is_mafia_only', false);
-    }
-
-    const { data, error } = await query;
-
     if (error) {
       console.error('Error fetching messages:', error);
       return;
@@ -36,7 +29,7 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
     // Update seen IDs and set messages
     seenIds.current = new Set((data || []).map(m => m.id));
     setMessages(data as any);
-  }, [roomId, isMafia]);
+  }, [roomId]);
 
   useEffect(() => {
     fetchMessages();
@@ -55,11 +48,6 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
           
           // Skip if already seen
           if (seenIds.current.has(newMessage.id)) {
-            return;
-          }
-          
-          // Skip mafia messages if user is not mafia
-          if (!isMafia && newMessage.is_mafia_only) {
             return;
           }
           
@@ -94,16 +82,40 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, isMafia]);
+  }, [roomId]);
 
-  async function sendMessage(content: string, playerId: string, isMafiaOnly: boolean = false) {
+  // Filter messages based on current role and phase
+  const filteredMessages = messages.filter(msg => {
+    // System messages are always visible
+    if (msg.is_system) return true;
+    
+    // Public messages (no role_type and not mafia_only) are always visible
+    if (!msg.role_type && !msg.is_mafia_only) return true;
+    
+    // Legacy mafia-only messages (for backward compatibility)
+    if (msg.is_mafia_only && currentRole === 'mafia') return true;
+    
+    // Role-specific messages: only visible to that role
+    if (msg.role_type) {
+      return msg.role_type === currentRole;
+    }
+    
+    return false;
+  });
+
+  async function sendMessage(content: string, playerId: string, roleType: RoleType | null = null) {
     if (!roomId || !content.trim()) return;
+
+    // Determine if this is a role-specific message
+    // Only set role_type during night phase for special roles
+    const isMafiaOnly = roleType === 'mafia';
 
     const { error } = await supabase.from('messages').insert({
       room_id: roomId,
       player_id: playerId,
       content: content.trim(),
       is_mafia_only: isMafiaOnly,
+      role_type: roleType,
     });
 
     if (error) {
@@ -111,5 +123,21 @@ export function useMessages(roomId: string | null, isMafia: boolean) {
     }
   }
 
-  return { messages, sendMessage, refetch: fetchMessages };
+  async function sendSystemMessage(content: string, roleType: RoleType | null = null) {
+    if (!roomId || !content.trim()) return;
+
+    const { error } = await supabase.from('messages').insert({
+      room_id: roomId,
+      content: content.trim(),
+      is_system: true,
+      is_mafia_only: false,
+      role_type: roleType,
+    });
+
+    if (error) {
+      console.error('Error sending system message:', error);
+    }
+  }
+
+  return { messages: filteredMessages, sendMessage, sendSystemMessage, refetch: fetchMessages };
 }

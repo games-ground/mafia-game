@@ -225,9 +225,9 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       detective: 'last_detective_target_name',
     }[role];
 
-    // For detective, also set the result immediately for instant feedback
+    // For detective, check the result and send a private chat message
     let additionalUpdates: Record<string, string | null> = {};
-    if (role === 'detective') {
+    if (role === 'detective' && target) {
       const { data: targetPlayer } = await supabase
         .from('room_players')
         .select('role')
@@ -237,6 +237,19 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       if (targetPlayer) {
         const isMafia = targetPlayer.role === 'mafia';
         additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
+        
+        // Send detective result as a private system message visible only to detectives
+        const resultMessage = isMafia 
+          ? `🔍 Your investigation reveals that ${target.player.nickname} is MAFIA!`
+          : `🔍 Your investigation reveals that ${target.player.nickname} is NOT Mafia.`;
+        
+        await supabase.from('messages').insert({
+          room_id: gameState.room_id,
+          content: resultMessage,
+          is_system: true,
+          is_mafia_only: false,
+          role_type: 'detective',
+        });
       }
     }
 

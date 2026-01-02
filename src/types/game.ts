@@ -94,6 +94,7 @@ export interface Message {
   content: string;
   is_system: boolean;
   is_mafia_only: boolean;
+  role_type: string | null; // For role-specific night chats (mafia, detective, doctor)
   created_at: string;
   player?: RoomPlayer;
 }

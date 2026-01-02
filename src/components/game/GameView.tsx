@@ -174,7 +174,7 @@ export function GameView({
             <ChatPanel
               roomId={room.id}
               currentRoomPlayerId={currentRoomPlayer.id}
-              isMafia={isMafia}
+              currentRole={role}
               isNight={isNight}
               isAlive={isAlive}
             />

@@ -112,26 +112,6 @@ export function PhaseHeader({
           </div>
         )}
       </div>
-
-      {/* Detective Result - show immediately after investigation */}
-      {detectiveResult && role === 'detective' && (
-        <div className={cn(
-          "mt-4 p-3 rounded-lg border",
-          detectiveResult === 'mafia' 
-            ? "bg-red-500/20 border-red-500/30" 
-            : "bg-emerald-500/20 border-emerald-500/30"
-        )}>
-          <p className={cn(
-            "text-sm font-medium",
-            detectiveResult === 'mafia' ? 'text-red-400' : 'text-emerald-400'
-          )}>
-            🔍 Investigation Result: The target is{' '}
-            <span className="font-bold">
-              {detectiveResult === 'mafia' ? 'MAFIA!' : 'NOT Mafia.'}
-            </span>
-          </p>
-        </div>
-      )}
     </div>
   );
 }

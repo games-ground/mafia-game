@@ -85,13 +85,21 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     };
   }, [roomId, fetchVotes]);
 
-  // Check if all night actions are complete (action-based mode only)
-  const allNightActionsComplete = useMemo(() => {
-    if (!gameState || gameState.phase !== 'night' || !roomPlayers) return false;
+  // Check if all night actions are complete based on game_state targets
+  // We determine which roles SHOULD act by checking if their targets are set
+  // The game_state fields tell us which actions are needed and which are done
+  const checkNightActionsComplete = useCallback(async (): Promise<boolean> => {
+    if (!gameState || gameState.phase !== 'night' || !roomId) return false;
 
-    // Get alive players with their roles
-    const alivePlayers = roomPlayers.filter(p => p.is_alive);
-    
+    // Fetch fresh role status from database to check which roles are alive
+    const { data: alivePlayers, error } = await supabase
+      .from('room_players')
+      .select('role')
+      .eq('room_id', roomId)
+      .eq('is_alive', true);
+
+    if (error || !alivePlayers) return false;
+
     const hasMafia = alivePlayers.some(p => p.role === 'mafia');
     const hasDoctor = alivePlayers.some(p => p.role === 'doctor');
     const hasDetective = alivePlayers.some(p => p.role === 'detective');
@@ -101,19 +109,36 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     const detectiveActed = !hasDetective || gameState.detective_target_id !== null;
 
     return mafiaActed && doctorActed && detectiveActed;
-  }, [gameState, roomPlayers]);
+  }, [gameState, roomId]);
 
-  // Trigger night countdown when all actions complete
+  // Track whether we've already triggered the night countdown for this phase
+  const nightCountdownTriggeredRef = useRef(false);
+
+  // Reset the trigger ref when phase changes
   useEffect(() => {
-    if (
-      allNightActionsComplete &&
-      gameState?.phase === 'night' &&
-      !showNightCountdown &&
-      !advancingPhaseRef.current
-    ) {
-      setShowNightCountdown(true);
+    nightCountdownTriggeredRef.current = false;
+  }, [gameState?.phase, gameState?.day_number]);
+
+  // Check night actions complete whenever game state changes (targets are set)
+  useEffect(() => {
+    if (gameState?.phase !== 'night' || showNightCountdown || advancingPhaseRef.current || nightCountdownTriggeredRef.current) {
+      return;
     }
-  }, [allNightActionsComplete, gameState?.phase, showNightCountdown]);
+
+    // Only check when a target is actually set (not on initial load)
+    const hasAnyTarget = gameState.mafia_target_id !== null || 
+                         gameState.doctor_target_id !== null || 
+                         gameState.detective_target_id !== null;
+    
+    if (!hasAnyTarget) return;
+
+    checkNightActionsComplete().then(allComplete => {
+      if (allComplete && !nightCountdownTriggeredRef.current) {
+        nightCountdownTriggeredRef.current = true;
+        setShowNightCountdown(true);
+      }
+    });
+  }, [gameState?.phase, gameState?.mafia_target_id, gameState?.doctor_target_id, gameState?.detective_target_id, showNightCountdown, checkNightActionsComplete]);
 
   async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
     if (!roomId) return;
@@ -490,7 +515,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   }
 
   async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
-    if (!roomId || !gameState) return;
+    if (!roomId) return;
+
+    // First update room status to waiting - this ensures all clients see lobby
+    await supabase
+      .from('rooms')
+      .update({ status: 'waiting' })
+      .eq('id', roomId);
 
     // Delete old game state
     await supabase
@@ -498,25 +529,23 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       .delete()
       .eq('room_id', roomId);
 
-    // Reset all players: make alive, remove roles, set not ready
-    for (const player of roomPlayers) {
-      await supabase
-        .from('room_players')
-        .update({ is_alive: true, role: null, is_ready: false })
-        .eq('id', player.id);
-    }
-
     // Delete old votes
     await supabase
       .from('votes')
       .delete()
       .eq('room_id', roomId);
 
-    // Update room status back to waiting
+    // Delete old game actions
     await supabase
-      .from('rooms')
-      .update({ status: 'waiting' })
-      .eq('id', roomId);
+      .from('game_actions')
+      .delete()
+      .eq('room_id', roomId);
+
+    // Reset all players: make alive, remove roles, set not ready (batch update)
+    await supabase
+      .from('room_players')
+      .update({ is_alive: true, role: null, is_ready: false })
+      .eq('room_id', roomId);
 
     // Add system message
     await supabase.from('messages').insert({
@@ -525,9 +554,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       is_system: true,
     });
 
-    // Clear local state
+    // Clear local state immediately
     setGameState(null);
     setVotes([]);
+    setShowVotingCountdown(false);
+    setShowNightCountdown(false);
+    advancingPhaseRef.current = false;
+    nightCountdownTriggeredRef.current = false;
   }
 
   // Check if all alive players have voted

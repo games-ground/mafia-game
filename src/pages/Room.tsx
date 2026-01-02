@@ -139,9 +139,12 @@ export default function Room() {
   }
 
   const isHost = room.host_id === player?.id;
-  const isInGame = room.status === 'playing' && gameState && gameState.phase !== 'lobby';
+  
+  // Check game status - room.status is the source of truth for whether we're in lobby or game
+  const isInGame = room.status === 'playing' && gameState && gameState.phase !== 'lobby' && gameState.phase !== 'game_over';
+  const isGameOver = gameState?.phase === 'game_over';
 
-  if (gameState?.phase === 'game_over') {
+  if (isGameOver) {
     return (
       <GameOverView
         gameState={gameState}

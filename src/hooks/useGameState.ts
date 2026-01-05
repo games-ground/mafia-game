@@ -217,6 +217,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
     if (!updateField) return;
 
+    // PREVENT DUPLICATE ACTIONS: Check if this role has already acted this night
+    const existingTarget = gameState[updateField as keyof GameState];
+    if (existingTarget !== null) {
+      console.log(`${role} has already acted this night`);
+      return;
+    }
+
     // Get target name for spectator mode
     const target = roomPlayers.find(p => p.id === targetId);
     const targetNameField = {
@@ -225,8 +232,13 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       detective: 'last_detective_target_name',
     }[role];
 
-    // For detective, check the result and send a private chat message
+    // Add target name for spectator visibility
     let additionalUpdates: Record<string, string | null> = {};
+    if (targetNameField && target) {
+      additionalUpdates[targetNameField] = target.player.nickname;
+    }
+
+    // For detective, store the result but DON'T send message yet - will be sent at dawn
     if (role === 'detective' && target) {
       const { data: targetPlayer } = await supabase
         .from('room_players')
@@ -237,25 +249,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       if (targetPlayer) {
         const isMafia = targetPlayer.role === 'mafia';
         additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
-        
-        // Send detective result as a private system message visible only to detectives
-        const resultMessage = isMafia 
-          ? `🔍 Your investigation reveals that ${target.player.nickname} is MAFIA!`
-          : `🔍 Your investigation reveals that ${target.player.nickname} is NOT Mafia.`;
-        
-        await supabase.from('messages').insert({
-          room_id: gameState.room_id,
-          content: resultMessage,
-          is_system: true,
-          is_mafia_only: false,
-          role_type: 'detective',
-        });
       }
-    }
-
-    // Add target name for spectator visibility
-    if (targetNameField && target) {
-      additionalUpdates[targetNameField] = target.player.nickname;
     }
 
     const { error } = await supabase
@@ -382,6 +376,8 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
     const mafiaTarget = gameState.mafia_target_id;
     const doctorTarget = gameState.doctor_target_id;
+    const detectiveTarget = gameState.detective_target_id;
+    const detectiveResult = gameState.detective_result;
 
     // Fetch fresh player data with roles for death messages
     const { data: freshPlayers, error } = await supabase
@@ -394,6 +390,26 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       return;
     }
 
+    // Send detective result NOW (at dawn) - visible only to detectives
+    if (detectiveTarget && detectiveResult) {
+      const investigatedPlayer = freshPlayers?.find(p => p.id === detectiveTarget);
+      if (investigatedPlayer) {
+        const nickname = (investigatedPlayer.player as any)?.nickname || 'Unknown';
+        const isMafia = detectiveResult === 'mafia';
+        const resultMessage = isMafia 
+          ? `🔍 Your investigation reveals that ${nickname} is MAFIA!`
+          : `🔍 Your investigation reveals that ${nickname} is NOT Mafia.`;
+        
+        await supabase.from('messages').insert({
+          room_id: roomId,
+          content: resultMessage,
+          is_system: true,
+          is_mafia_only: false,
+          role_type: 'detective',
+        });
+      }
+    }
+
     // Handle mafia kill
     if (mafiaTarget && mafiaTarget !== doctorTarget) {
       await supabase
@@ -403,7 +419,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === mafiaTarget);
       if (victim) {
-        // Always reveal role on death - show Mafia or Civilian
+        // Show only Mafia or Civilian - don't reveal exact role (detective/doctor)
         const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
@@ -443,7 +459,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       return;
     }
 
-    // Count votes
+    // Count votes - only count non-null target votes
     const voteCounts: Record<string, number> = {};
     for (const vote of (freshVotes || [])) {
       if (vote.target_id) {
@@ -451,22 +467,25 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       }
     }
 
-    // Find player with most votes
+    // Find player with most votes - handle ties properly
     let maxVotes = 0;
     let eliminated: string | null = null;
-    let tie = false;
+    let tiedPlayers: string[] = [];
 
     for (const [targetId, count] of Object.entries(voteCounts)) {
       if (count > maxVotes) {
         maxVotes = count;
         eliminated = targetId;
-        tie = false;
-      } else if (count === maxVotes) {
-        tie = true;
+        tiedPlayers = [targetId];
+      } else if (count === maxVotes && maxVotes > 0) {
+        tiedPlayers.push(targetId);
       }
     }
 
-    if (eliminated && !tie && maxVotes > 0) {
+    // Only eliminate if there's a clear winner (no tie)
+    const hasTie = tiedPlayers.length > 1;
+    
+    if (eliminated && !hasTie && maxVotes > 0) {
       await supabase
         .from('room_players')
         .update({ is_alive: false })
@@ -480,7 +499,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
 
       const victim = freshPlayers?.find(p => p.id === eliminated);
       if (victim) {
-        // Always reveal role on elimination - show Mafia or Civilian
+        // Show only Mafia or Civilian - don't reveal exact role (detective/doctor)
         const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
         const nickname = (victim.player as any)?.nickname || 'Unknown';
         
@@ -490,6 +509,12 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
           is_system: true,
         });
       }
+    } else if (hasTie) {
+      await supabase.from('messages').insert({
+        room_id: roomId,
+        content: `⚖️ The vote ended in a tie. No one was eliminated.`,
+        is_system: true,
+      });
     } else {
       await supabase.from('messages').insert({
         room_id: roomId,

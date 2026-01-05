@@ -74,8 +74,16 @@ export function GameView({
     }
   };
 
+  // Check if current role has already acted based on gameState
+  const hasActedThisNight = isNight && role && {
+    mafia: gameState.mafia_target_id !== null,
+    doctor: gameState.doctor_target_id !== null,
+    detective: gameState.detective_target_id !== null,
+    civilian: false,
+  }[role];
+
   const canAct = isAlive && (
-    (isNight && role && ['mafia', 'doctor', 'detective'].includes(role)) ||
+    (isNight && role && ['mafia', 'doctor', 'detective'].includes(role) && !hasActedThisNight) ||
     isVoting
   );
 
@@ -141,13 +149,14 @@ export function GameView({
               canSelect={canAct}
               onSelect={handleTargetSelect}
               currentRole={role}
+              gameState={gameState}
             />
 
             {/* Phase-specific instructions */}
             {isNight && isAlive && (
               <NightActions
                 role={role}
-                hasActed={!!selectedTarget}
+                hasActed={!!selectedTarget || !!hasActedThisNight}
               />
             )}
 

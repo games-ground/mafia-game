@@ -55,6 +55,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     
     // For the current player, fetch their own role and mafia partners using secure RPCs
     if (playerId) {
+      // CRITICAL: Always fetch fresh role from database
       const [roleResult, partnersResult] = await Promise.all([
         supabase.rpc('get_own_role', { p_player_id: playerId, p_room_id: roomId }),
         supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_room_id: roomId }),
@@ -108,6 +109,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${room.id}` },
         () => {
+          // Refetch to get updated player data including roles
           fetchRoomPlayers(room.id);
         }
       )
@@ -117,6 +119,8 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
         (payload) => {
           if (payload.eventType === 'UPDATE') {
             setRoom(payload.new as Room);
+            // When room status changes (e.g., game starts), refetch players to get roles
+            fetchRoomPlayers(room.id);
           }
         }
       )

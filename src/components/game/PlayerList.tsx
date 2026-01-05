@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RoomPlayer, Vote, GamePhase, RoleType, Player } from '@/types/game';
+import { RoomPlayer, Vote, GamePhase, RoleType, Player, GameState } from '@/types/game';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skull, User, Check, Target, Shield, Search, ThumbsUp } from 'lucide-react';
@@ -15,6 +15,7 @@ interface PlayerListProps {
   canSelect: boolean;
   onSelect: (playerId: string) => void;
   currentRole: RoleType | null;
+  gameState?: GameState | null;
 }
 
 export function PlayerList({
@@ -26,12 +27,21 @@ export function PlayerList({
   canSelect,
   onSelect,
   currentRole,
+  gameState,
 }: PlayerListProps) {
   const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
   
   const isNight = phase === 'night';
   const isVoting = phase === 'day_voting';
   const isMafia = currentRole === 'mafia';
+
+  // Check if the current role has already acted based on game state
+  const hasAlreadyActed = isNight && gameState && currentRole && {
+    mafia: gameState.mafia_target_id !== null,
+    doctor: gameState.doctor_target_id !== null,
+    detective: gameState.detective_target_id !== null,
+    civilian: false,
+  }[currentRole];
 
   // Track who has voted (for thumbs up display)
   const votersSet = new Set<string>();
@@ -63,14 +73,17 @@ export function PlayerList({
   const selectablePlayers = getSelectablePlayers();
   const selectableIds = new Set(selectablePlayers.map(p => p.id));
 
+  // Disable selection if role has already acted this night
+  const canActNow = canSelect && !hasAlreadyActed;
+
   const getActionButton = (player: RoomPlayer & { player: Player }) => {
-    const isSelected = player.id === selectedTargetId;
+    const isSelected = player.id === selectedTargetId || hasAlreadyActed;
     // Doctor can select themselves, so we check selectableIds which already accounts for this
-    const isSelectable = canSelect && selectableIds.has(player.id);
+    const isSelectable = canActNow && selectableIds.has(player.id);
 
     if (!player.is_alive) return null;
-    if (!canSelect) return null;
-    if (!isSelectable) return null;
+    if (!canActNow && !hasAlreadyActed) return null;
+    if (!isSelectable && !hasAlreadyActed) return null;
 
     if (isNight && currentRole) {
       const actionConfig: Record<string, { label: string; icon: React.ReactNode; variant: string }> = {
@@ -81,6 +94,16 @@ export function PlayerList({
 
       const config = actionConfig[currentRole];
       if (!config) return null;
+
+      // If already acted, show "Done" badge without button
+      if (hasAlreadyActed) {
+        return (
+          <Badge variant="secondary" className="bg-primary/20 text-primary">
+            <Check className="w-3 h-3 mr-1" />
+            Submitted
+          </Badge>
+        );
+      }
 
       return (
         <Button

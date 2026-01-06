@@ -515,6 +515,7 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_idle_rooms: { Args: { p_idle_minutes?: number }; Returns: number }
       get_mafia_partners: {
         Args: { p_player_id: string; p_room_id: string }
         Returns: {
@@ -533,6 +534,10 @@ export type Database = {
           p_room_id: string
           p_target_room_player_id: string
         }
+        Returns: boolean
+      }
+      restart_game: {
+        Args: { p_host_player_id: string; p_room_id: string }
         Returns: boolean
       }
       start_game: {

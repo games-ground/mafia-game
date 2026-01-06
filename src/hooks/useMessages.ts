@@ -86,21 +86,18 @@ export function useMessages(roomId: string | null, currentRole: RoleType | null,
 
   // Filter messages based on current role and phase
   const filteredMessages = messages.filter(msg => {
-    // System messages are always visible
-    if (msg.is_system) return true;
-    
-    // Public messages (no role_type and not mafia_only) are always visible
-    if (!msg.role_type && !msg.is_mafia_only) return true;
-    
-    // Legacy mafia-only messages (for backward compatibility)
-    if (msg.is_mafia_only && currentRole === 'mafia') return true;
-    
-    // Role-specific messages: only visible to that role
+    // Role-specific messages (system or player): only visible to that role
     if (msg.role_type) {
       return msg.role_type === currentRole;
     }
     
-    return false;
+    // Legacy mafia-only messages (for backward compatibility)
+    if (msg.is_mafia_only) {
+      return currentRole === 'mafia';
+    }
+    
+    // Public messages (no role_type and not mafia_only) are always visible
+    return true;
   });
 
   async function sendMessage(content: string, playerId: string, roleType: RoleType | null = null) {

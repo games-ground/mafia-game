@@ -238,7 +238,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       additionalUpdates[targetNameField] = target.player.nickname;
     }
 
-    // For detective, store the result but DON'T send message yet - will be sent at dawn
+    // For detective, fetch role and send private immediate result
     if (role === 'detective' && target) {
       const { data: targetPlayer } = await supabase
         .from('room_players')
@@ -248,7 +248,19 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       
       if (targetPlayer) {
         const isMafia = targetPlayer.role === 'mafia';
-        additionalUpdates.detective_result = isMafia ? 'mafia' : 'not_mafia';
+        const nickname = target.player.nickname;
+        const resultMessage = isMafia
+          ? `🔍 Your investigation reveals that ${nickname} is MAFIA!`
+          : `🔍 Your investigation reveals that ${nickname} is NOT Mafia.`;
+
+        // Send immediately as detective-only system message
+        await supabase.from('messages').insert({
+          room_id: roomId,
+          content: resultMessage,
+          is_system: true,
+          is_mafia_only: false,
+          role_type: 'detective',
+        });
       }
     }
 
@@ -390,25 +402,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       return;
     }
 
-    // Send detective result NOW (at dawn) - visible only to detectives
-    if (detectiveTarget && detectiveResult) {
-      const investigatedPlayer = freshPlayers?.find(p => p.id === detectiveTarget);
-      if (investigatedPlayer) {
-        const nickname = (investigatedPlayer.player as any)?.nickname || 'Unknown';
-        const isMafia = detectiveResult === 'mafia';
-        const resultMessage = isMafia 
-          ? `🔍 Your investigation reveals that ${nickname} is MAFIA!`
-          : `🔍 Your investigation reveals that ${nickname} is NOT Mafia.`;
-        
-        await supabase.from('messages').insert({
-          room_id: roomId,
-          content: resultMessage,
-          is_system: true,
-          is_mafia_only: false,
-          role_type: 'detective',
-        });
-      }
-    }
+    // Detective result already sent immediately on action - nothing to do here
 
     // Handle mafia kill
     if (mafiaTarget && mafiaTarget !== doctorTarget) {
@@ -552,45 +546,19 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }
 
-  async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
-    if (!roomId) return;
+  async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }, hostPlayerId?: string) {
+    if (!roomId || !hostPlayerId) return;
 
-    // First update room status to waiting - this ensures all clients see lobby
-    await supabase
-      .from('rooms')
-      .update({ status: 'waiting' })
-      .eq('id', roomId);
-
-    // Delete old game state
-    await supabase
-      .from('game_state')
-      .delete()
-      .eq('room_id', roomId);
-
-    // Delete old votes
-    await supabase
-      .from('votes')
-      .delete()
-      .eq('room_id', roomId);
-
-    // Delete old game actions
-    await supabase
-      .from('game_actions')
-      .delete()
-      .eq('room_id', roomId);
-
-    // Reset all players: make alive, remove roles, set not ready (batch update)
-    await supabase
-      .from('room_players')
-      .update({ is_alive: true, role: null, is_ready: false })
-      .eq('room_id', roomId);
-
-    // Add system message
-    await supabase.from('messages').insert({
-      room_id: roomId,
-      content: '🔄 Game has been reset. Waiting for players to ready up...',
-      is_system: true,
+    // Use secure RPC to reset everything in a single DB transaction
+    const { error } = await supabase.rpc('restart_game', {
+      p_host_player_id: hostPlayerId,
+      p_room_id: roomId,
     });
+
+    if (error) {
+      console.error('Error restarting game:', error);
+      return;
+    }
 
     // Clear local state immediately
     setGameState(null);

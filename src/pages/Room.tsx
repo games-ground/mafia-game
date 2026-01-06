@@ -160,7 +160,7 @@ export default function Room() {
           mafia_count: room.mafia_count,
           doctor_count: room.doctor_count,
           detective_count: room.detective_count,
-        })}
+        }, player?.id)}
       />
     );
   }

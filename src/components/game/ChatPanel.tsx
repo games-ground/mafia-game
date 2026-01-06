@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageCircle, Send, Skull, Eye, Stethoscope, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RoleType } from '@/types/game';
-
+import { SystemMessage } from './SystemMessage';
 interface ChatPanelProps {
   roomId: string;
   currentRoomPlayerId: string;
@@ -110,17 +110,27 @@ export function ChatPanel({
             {messages.map((msg) => {
               const roleBadge = getRoleBadge(msg.role_type, msg.is_mafia_only);
               
+              // Use enhanced SystemMessage component for system messages
+              if (msg.is_system) {
+                return (
+                  <SystemMessage 
+                    key={msg.id} 
+                    content={msg.content} 
+                    roleType={msg.role_type} 
+                  />
+                );
+              }
+              
               return (
                 <div
                   key={msg.id}
                   className={cn(
                     'p-2 rounded-lg text-sm',
-                    msg.is_system && 'bg-muted/50 text-muted-foreground italic text-center',
-                    !msg.is_system && getMessageStyle(msg.role_type, msg.is_mafia_only),
+                    getMessageStyle(msg.role_type, msg.is_mafia_only),
                     msg.player_id === currentRoomPlayerId && 'ml-4'
                   )}
                 >
-                  {!msg.is_system && msg.room_player && (
+                  {msg.room_player && (
                     <p className={cn(
                       'font-semibold text-xs mb-1',
                       roleBadge?.color

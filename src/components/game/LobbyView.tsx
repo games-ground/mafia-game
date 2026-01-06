@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Room, RoomPlayer, Player } from '@/types/game';
-import { Copy, Crown, UserMinus, Users, Check, Loader2 } from 'lucide-react';
+import { Copy, Crown, UserMinus, Users, Check, Loader2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { GameConfig } from './GameConfig';
 import { LoadingButton } from '@/components/ui/loading-button';
-
+import { GameRulesSheet } from './GameRulesSheet';
+import { cn } from '@/lib/utils';
 interface LobbyViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
@@ -88,9 +89,12 @@ export function LobbyView({
       
       <div className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
-          {/* Room Code Header */}
+          {/* Room Code Header with Rules Button */}
           <div className="text-center mb-8 animate-fade-in">
-            <p className="text-muted-foreground text-sm mb-2">ROOM CODE</p>
+            <div className="flex justify-end mb-2">
+              <GameRulesSheet />
+            </div>
+            <p className="text-muted-foreground text-sm mb-2 uppercase tracking-widest">Room Code</p>
             <button
               onClick={copyRoomCode}
               className="flex items-center justify-center gap-3 mx-auto group"
@@ -112,16 +116,28 @@ export function LobbyView({
                 <Users className="w-5 h-5" />
                 Players ({roomPlayers.length})
               </CardTitle>
-              <Badge variant={roomPlayers.length >= room.min_players ? 'default' : 'secondary'}>
+              <Badge 
+                variant={roomPlayers.length >= room.min_players ? 'default' : 'secondary'}
+                className={cn(
+                  roomPlayers.length >= room.min_players && "bg-success text-success-foreground"
+                )}
+              >
                 {roomPlayers.length >= room.min_players ? 'Ready to start' : `Need ${room.min_players - roomPlayers.length} more`}
               </Badge>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {roomPlayers.map((rp) => (
+                {roomPlayers.map((rp) => {
+                  const isReady = rp.is_ready || rp.player_id === room.host_id;
+                  return (
                   <div
                     key={rp.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50"
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border transition-all",
+                      isReady 
+                        ? "bg-success/10 border-success/30" 
+                        : "bg-secondary/50 border-border/50"
+                    )}
                   >
                     <div className="flex items-center gap-3">
                       {rp.player_id === room.host_id && (
@@ -135,13 +151,16 @@ export function LobbyView({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {rp.is_ready || rp.player_id === room.host_id ? (
-                        <Badge className="bg-success text-success-foreground">
-                          <Check className="w-3 h-3 mr-1" />
+                      {isReady ? (
+                        <Badge className="bg-success/20 text-success border border-success/30 gap-1">
+                          <Check className="w-3 h-3" />
                           Ready
                         </Badge>
                       ) : (
-                        <Badge variant="secondary">Waiting</Badge>
+                        <Badge variant="outline" className="gap-1 text-muted-foreground border-muted-foreground/30">
+                          <Clock className="w-3 h-3" />
+                          Waiting
+                        </Badge>
                       )}
                       {isHost && rp.player_id !== room.host_id && (
                         <Button
@@ -160,7 +179,7 @@ export function LobbyView({
                       )}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </CardContent>
           </Card>

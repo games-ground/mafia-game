@@ -161,7 +161,7 @@ export default function Home() {
 
         {/* Footer */}
         <p className="mt-8 text-muted-foreground text-sm font-body">
-          6-12 players • Private rooms • Real-time multiplayer
+          4-12 players • Private rooms • Real-time multiplayer
         </p>
       </div>
     </div>

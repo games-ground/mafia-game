@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Room, RoomPlayer, GameState, Vote, RoleType, Player } from '@/types/game';
+import { cn } from '@/lib/utils';
 import { PhaseHeader } from './PhaseHeader';
 import { PlayerList } from './PlayerList';
 import { NightActions } from './NightActions';
@@ -90,9 +91,37 @@ export function GameView({
   const alivePlayers = roomPlayers.filter(p => p.is_alive);
   const isMafia = role === 'mafia';
 
+  // Get phase-specific background class
+  const getPhaseBackground = () => {
+    if (isNight) return 'bg-gradient-night';
+    if (gameState.phase === 'day_voting') return 'bg-gradient-voting';
+    return 'bg-gradient-day';
+  };
+
   return (
-    <div className={`min-h-screen relative transition-all duration-1000 ${isNight ? 'bg-gradient-night' : 'bg-gradient-day'}`}>
-      <div className="fog-overlay" />
+    <div className={cn(
+      "min-h-screen relative transition-all duration-1000",
+      getPhaseBackground()
+    )}>
+      {/* Phase-specific overlay effects */}
+      <div className={cn(
+        "fog-overlay transition-opacity duration-1000",
+        isNight && "opacity-70"
+      )} />
+      
+      {/* Night overlay with stars effect */}
+      {isNight && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/30 via-transparent to-slate-950/50" />
+        </div>
+      )}
+      
+      {/* Day overlay with warm glow */}
+      {!isNight && gameState.phase !== 'game_over' && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 via-transparent to-transparent" />
+        </div>
+      )}
       
       {/* Night Countdown Overlay - show for all; only host advances */}
       {showNightCountdown && (

@@ -1,8 +1,9 @@
-CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
+CREATE EXTENSION IF NOT EXISTS "pg_cron";
+CREATE EXTENSION IF NOT EXISTS "pg_graphql";
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
-CREATE EXTENSION IF NOT EXISTS "plpgsql" WITH SCHEMA "pg_catalog";
-CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
+CREATE EXTENSION IF NOT EXISTS "plpgsql";
+CREATE EXTENSION IF NOT EXISTS "supabase_vault";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 BEGIN;
 
@@ -58,6 +59,277 @@ CREATE TYPE public.role_type AS ENUM (
 
 
 --
+-- Name: cleanup_idle_rooms(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cleanup_idle_rooms(p_idle_minutes integer DEFAULT 60) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  cutoff timestamptz;
+  room_ids uuid[];
+BEGIN
+  cutoff := now() - make_interval(mins => p_idle_minutes);
+
+  SELECT array_agg(r.id)
+  INTO room_ids
+  FROM rooms r
+  LEFT JOIN game_state gs ON gs.room_id = r.id
+  LEFT JOIN LATERAL (
+    SELECT max(created_at) AS max_created_at
+    FROM messages m
+    WHERE m.room_id = r.id
+  ) msg ON true
+  LEFT JOIN LATERAL (
+    SELECT max(created_at) AS max_created_at
+    FROM votes v
+    WHERE v.room_id = r.id
+  ) vt ON true
+  LEFT JOIN LATERAL (
+    SELECT max(created_at) AS max_created_at
+    FROM game_actions ga
+    WHERE ga.room_id = r.id
+  ) act ON true
+  WHERE greatest(
+    r.updated_at,
+    r.created_at,
+    coalesce(gs.updated_at, 'epoch'::timestamptz),
+    coalesce(msg.max_created_at, 'epoch'::timestamptz),
+    coalesce(vt.max_created_at, 'epoch'::timestamptz),
+    coalesce(act.max_created_at, 'epoch'::timestamptz)
+  ) < cutoff;
+
+  IF room_ids IS NULL OR array_length(room_ids, 1) IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  -- Delete children first (FK order)
+  DELETE FROM game_actions WHERE room_id = ANY(room_ids);
+  DELETE FROM votes WHERE room_id = ANY(room_ids);
+  DELETE FROM messages WHERE room_id = ANY(room_ids);
+  DELETE FROM game_state WHERE room_id = ANY(room_ids);
+  DELETE FROM room_players WHERE room_id = ANY(room_ids);
+  DELETE FROM rooms WHERE id = ANY(room_ids);
+
+  RETURN array_length(room_ids, 1);
+END;
+$$;
+
+
+--
+-- Name: get_mafia_partners(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_mafia_partners(p_player_id uuid, p_room_id uuid) RETURNS TABLE(room_player_id uuid, partner_player_id uuid, nickname text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  -- Only return if requesting player is mafia
+  IF NOT EXISTS (
+    SELECT 1 FROM room_players
+    WHERE player_id = p_player_id
+    AND room_id = p_room_id
+    AND role = 'mafia'
+  ) THEN
+    RETURN;
+  END IF;
+  
+  -- Return other mafia members
+  RETURN QUERY
+  SELECT rp.id, rp.player_id, p.nickname
+  FROM room_players rp
+  JOIN players p ON p.id = rp.player_id
+  WHERE rp.room_id = p_room_id
+  AND rp.role = 'mafia'
+  AND rp.player_id != p_player_id;
+END;
+$$;
+
+
+--
+-- Name: get_own_role(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_own_role(p_player_id uuid, p_room_id uuid) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  player_role text;
+BEGIN
+  SELECT role::text INTO player_role
+  FROM room_players
+  WHERE player_id = p_player_id
+  AND room_id = p_room_id;
+  
+  RETURN player_role;
+END;
+$$;
+
+
+--
+-- Name: kick_player(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.kick_player(p_host_player_id uuid, p_room_id uuid, p_target_room_player_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_room_host_id uuid;
+  v_target_player_id uuid;
+BEGIN
+  -- Verify the caller is the host
+  SELECT host_id INTO v_room_host_id FROM rooms WHERE id = p_room_id;
+  
+  IF v_room_host_id IS NULL OR v_room_host_id != p_host_player_id THEN
+    RETURN false;
+  END IF;
+  
+  -- Get the player_id of the target
+  SELECT player_id INTO v_target_player_id FROM room_players WHERE id = p_target_room_player_id;
+  
+  IF v_target_player_id IS NULL THEN
+    RETURN false;
+  END IF;
+  
+  -- Add to kicked_players table to prevent rejoin
+  INSERT INTO kicked_players (room_id, player_id)
+  VALUES (p_room_id, v_target_player_id)
+  ON CONFLICT (room_id, player_id) DO NOTHING;
+  
+  -- Delete the room_player entry
+  DELETE FROM room_players WHERE id = p_target_room_player_id;
+  
+  RETURN true;
+END;
+$$;
+
+
+--
+-- Name: restart_game(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.restart_game(p_host_player_id uuid, p_room_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  room_host_id uuid;
+BEGIN
+  SELECT host_id INTO room_host_id FROM rooms WHERE id = p_room_id;
+
+  IF room_host_id IS NULL THEN
+    RAISE EXCEPTION 'Room not found';
+  END IF;
+
+  IF room_host_id != p_host_player_id THEN
+    RAISE EXCEPTION 'Only host can restart the game';
+  END IF;
+
+  -- Put room back to lobby first so all clients immediately sync
+  UPDATE rooms SET status = 'waiting' WHERE id = p_room_id;
+
+  -- Clear all game-specific state for this room (order matters for FKs)
+  DELETE FROM game_actions WHERE room_id = p_room_id;
+  DELETE FROM votes WHERE room_id = p_room_id;
+  DELETE FROM messages WHERE room_id = p_room_id;
+  DELETE FROM game_state WHERE room_id = p_room_id;
+
+  -- Reset players (keep them in the room)
+  UPDATE room_players
+    SET is_alive = true,
+        role = NULL,
+        is_ready = false
+  WHERE room_id = p_room_id;
+
+  -- Add fresh system message
+  INSERT INTO messages (room_id, content, is_system, is_mafia_only, role_type)
+  VALUES (p_room_id, '🔄 Game has been reset. Waiting for players to ready up...', true, false, NULL);
+
+  RETURN true;
+END;
+$$;
+
+
+--
+-- Name: start_game(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.start_game(p_host_player_id uuid, p_room_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  room_host_id uuid;
+  room_status text;
+BEGIN
+  -- Get room info
+  SELECT host_id, status INTO room_host_id, room_status FROM rooms WHERE id = p_room_id;
+  
+  -- Verify starter is host
+  IF room_host_id != p_host_player_id THEN
+    RAISE EXCEPTION 'Only host can start the game';
+  END IF;
+  
+  -- Verify room is in waiting status
+  IF room_status != 'waiting' THEN
+    RAISE EXCEPTION 'Game already started or room not in waiting status';
+  END IF;
+  
+  -- Update room status
+  UPDATE rooms SET status = 'playing' WHERE id = p_room_id;
+  
+  RETURN true;
+END;
+$$;
+
+
+--
+-- Name: update_room_config(uuid, uuid, integer, integer, integer, text, integer, integer, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.update_room_config(p_host_player_id uuid, p_room_id uuid, p_mafia_count integer DEFAULT NULL::integer, p_doctor_count integer DEFAULT NULL::integer, p_detective_count integer DEFAULT NULL::integer, p_night_mode text DEFAULT NULL::text, p_day_duration integer DEFAULT NULL::integer, p_night_duration integer DEFAULT NULL::integer, p_show_vote_counts boolean DEFAULT NULL::boolean, p_reveal_roles_on_death boolean DEFAULT NULL::boolean) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  room_host_id uuid;
+  room_status text;
+BEGIN
+  -- Get room info
+  SELECT host_id, status INTO room_host_id, room_status FROM rooms WHERE id = p_room_id;
+  
+  -- Verify updater is host
+  IF room_host_id != p_host_player_id THEN
+    RAISE EXCEPTION 'Only host can update room config';
+  END IF;
+  
+  -- Verify room is in waiting status
+  IF room_status != 'waiting' THEN
+    RAISE EXCEPTION 'Cannot update config after game has started';
+  END IF;
+  
+  -- Update only provided fields
+  UPDATE rooms SET
+    mafia_count = COALESCE(p_mafia_count, mafia_count),
+    doctor_count = COALESCE(p_doctor_count, doctor_count),
+    detective_count = COALESCE(p_detective_count, detective_count),
+    night_mode = COALESCE(p_night_mode, night_mode),
+    day_duration = COALESCE(p_day_duration, day_duration),
+    night_duration = COALESCE(p_night_duration, night_duration),
+    show_vote_counts = COALESCE(p_show_vote_counts, show_vote_counts),
+    reveal_roles_on_death = COALESCE(p_reveal_roles_on_death, reveal_roles_on_death)
+  WHERE id = p_room_id;
+  
+  RETURN true;
+END;
+$$;
+
+
+--
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -107,7 +379,24 @@ CREATE TABLE public.game_state (
     detective_result text,
     winner text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_mafia_target_name text,
+    last_doctor_target_name text,
+    last_detective_target_name text
+);
+
+ALTER TABLE ONLY public.game_state REPLICA IDENTITY FULL;
+
+
+--
+-- Name: kicked_players; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.kicked_players (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    room_id uuid NOT NULL,
+    player_id uuid NOT NULL,
+    kicked_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -122,8 +411,11 @@ CREATE TABLE public.messages (
     content text NOT NULL,
     is_system boolean DEFAULT false NOT NULL,
     is_mafia_only boolean DEFAULT false NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    role_type text
 );
+
+ALTER TABLE ONLY public.messages REPLICA IDENTITY FULL;
 
 
 --
@@ -158,8 +450,11 @@ CREATE TABLE public.room_players (
     is_ready boolean DEFAULT false NOT NULL,
     role public.role_type,
     is_alive boolean DEFAULT true NOT NULL,
-    joined_at timestamp with time zone DEFAULT now() NOT NULL
+    joined_at timestamp with time zone DEFAULT now() NOT NULL,
+    kicked boolean DEFAULT false NOT NULL
 );
+
+ALTER TABLE ONLY public.room_players REPLICA IDENTITY FULL;
 
 
 --
@@ -181,8 +476,35 @@ CREATE TABLE public.rooms (
     night_mode text DEFAULT 'timed'::text NOT NULL,
     night_duration integer DEFAULT 30,
     day_duration integer DEFAULT 60,
+    show_vote_counts boolean DEFAULT true NOT NULL,
+    reveal_roles_on_death boolean DEFAULT true NOT NULL,
     CONSTRAINT rooms_night_mode_check CHECK ((night_mode = ANY (ARRAY['timed'::text, 'action_complete'::text])))
 );
+
+ALTER TABLE ONLY public.rooms REPLICA IDENTITY FULL;
+
+
+--
+-- Name: room_players_safe; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.room_players_safe WITH (security_invoker='on') AS
+ SELECT id,
+    room_id,
+    player_id,
+    is_alive,
+    is_ready,
+    joined_at,
+        CASE
+            WHEN (EXISTS ( SELECT 1
+               FROM public.game_state gs
+              WHERE ((gs.room_id = rp.room_id) AND (gs.phase = 'game_over'::public.game_phase)))) THEN role
+            WHEN ((NOT is_alive) AND (EXISTS ( SELECT 1
+               FROM public.rooms r
+              WHERE ((r.id = rp.room_id) AND (r.reveal_roles_on_death = true))))) THEN role
+            ELSE NULL::public.role_type
+        END AS role
+   FROM public.room_players rp;
 
 
 --
@@ -197,6 +519,8 @@ CREATE TABLE public.votes (
     day_number integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+ALTER TABLE ONLY public.votes REPLICA IDENTITY FULL;
 
 
 --
@@ -221,6 +545,22 @@ ALTER TABLE ONLY public.game_state
 
 ALTER TABLE ONLY public.game_state
     ADD CONSTRAINT game_state_room_id_key UNIQUE (room_id);
+
+
+--
+-- Name: kicked_players kicked_players_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kicked_players
+    ADD CONSTRAINT kicked_players_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: kicked_players kicked_players_room_id_player_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kicked_players
+    ADD CONSTRAINT kicked_players_room_id_player_id_key UNIQUE (room_id, player_id);
 
 
 --
@@ -293,6 +633,21 @@ ALTER TABLE ONLY public.votes
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_room_id_voter_id_day_number_key UNIQUE (room_id, voter_id, day_number);
+
+
+--
+-- Name: votes votes_unique_per_day; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.votes
+    ADD CONSTRAINT votes_unique_per_day UNIQUE (room_id, voter_id, day_number);
+
+
+--
+-- Name: room_players_unique_per_room; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX room_players_unique_per_room ON public.room_players USING btree (room_id, player_id);
 
 
 --
@@ -373,6 +728,22 @@ ALTER TABLE ONLY public.game_state
 
 
 --
+-- Name: kicked_players kicked_players_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kicked_players
+    ADD CONSTRAINT kicked_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE CASCADE;
+
+
+--
+-- Name: kicked_players kicked_players_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kicked_players
+    ADD CONSTRAINT kicked_players_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id) ON DELETE CASCADE;
+
+
+--
 -- Name: messages messages_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -444,27 +815,6 @@ CREATE POLICY "Anyone can create game_actions" ON public.game_actions FOR INSERT
 
 
 --
--- Name: game_state Anyone can create game_state; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Anyone can create game_state" ON public.game_state FOR INSERT WITH CHECK (true);
-
-
---
--- Name: messages Anyone can create messages; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Anyone can create messages" ON public.messages FOR INSERT WITH CHECK (true);
-
-
---
--- Name: players Anyone can create players; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Anyone can create players" ON public.players FOR INSERT WITH CHECK (true);
-
-
---
 -- Name: rooms Anyone can create rooms; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -476,13 +826,6 @@ CREATE POLICY "Anyone can create rooms" ON public.rooms FOR INSERT WITH CHECK (t
 --
 
 CREATE POLICY "Anyone can create votes" ON public.votes FOR INSERT WITH CHECK (true);
-
-
---
--- Name: room_players Anyone can join rooms; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Anyone can join rooms" ON public.room_players FOR INSERT WITH CHECK (true);
 
 
 --
@@ -504,6 +847,13 @@ CREATE POLICY "Anyone can read game_actions" ON public.game_actions FOR SELECT U
 --
 
 CREATE POLICY "Anyone can read game_state" ON public.game_state FOR SELECT USING (true);
+
+
+--
+-- Name: kicked_players Anyone can read kicked_players; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Anyone can read kicked_players" ON public.kicked_players FOR SELECT USING (true);
 
 
 --
@@ -577,6 +927,45 @@ CREATE POLICY "Anyone can update votes" ON public.votes FOR UPDATE USING (true);
 
 
 --
+-- Name: players Create player with valid defaults; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Create player with valid defaults" ON public.players FOR INSERT WITH CHECK (((games_played = 0) AND (games_won = 0) AND (games_won_as_civilian = 0) AND (games_won_as_mafia = 0) AND (total_kills = 0) AND (total_saves = 0) AND (correct_investigations = 0) AND (visittotal_investigations = 0)));
+
+
+--
+-- Name: game_state Create valid game state; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Create valid game state" ON public.game_state FOR INSERT WITH CHECK (((NOT (EXISTS ( SELECT 1
+   FROM public.game_state gs
+  WHERE (gs.room_id = game_state.room_id)))) AND (phase = 'night'::public.game_phase) AND (day_number = 1)));
+
+
+--
+-- Name: messages Create valid messages; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Create valid messages" ON public.messages FOR INSERT WITH CHECK ((((is_system = false) AND (player_id IS NOT NULL)) OR ((is_system = true) AND (player_id IS NULL))));
+
+
+--
+-- Name: room_players Join valid rooms; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Join valid rooms" ON public.room_players FOR INSERT WITH CHECK (((EXISTS ( SELECT 1
+   FROM public.rooms
+  WHERE ((rooms.id = room_players.room_id) AND (rooms.status = 'waiting'::text)))) AND (role IS NULL) AND (is_ready = false) AND (is_alive = true)));
+
+
+--
+-- Name: kicked_players No direct inserts; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "No direct inserts" ON public.kicked_players FOR INSERT WITH CHECK (false);
+
+
+--
 -- Name: game_actions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -587,6 +976,12 @@ ALTER TABLE public.game_actions ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.game_state ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: kicked_players; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.kicked_players ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: messages; Type: ROW SECURITY; Schema: public; Owner: -

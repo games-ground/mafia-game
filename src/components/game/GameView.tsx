@@ -12,6 +12,9 @@ import { SpectatorPanel } from './SpectatorPanel';
 import { CountdownOverlay } from './CountdownOverlay';
 import { PhaseTransition } from './PhaseTransition';
 import { VotingSummary } from './VotingSummary';
+import { Button } from '@/components/ui/button';
+import { XCircle } from 'lucide-react';
+
 interface GameViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
@@ -21,6 +24,7 @@ interface GameViewProps {
   onNightAction: (targetId: string, role: RoleType) => void;
   onVote: (targetId: string | null) => void;
   onAdvancePhase: () => void;
+  onEndGame?: () => void;
   isHost: boolean;
   showVotingCountdown?: boolean;
   onVotingCountdownComplete?: (shouldAdvance: boolean) => void;
@@ -37,6 +41,7 @@ export function GameView({
   onNightAction,
   onVote,
   onAdvancePhase,
+  onEndGame,
   isHost,
   showVotingCountdown,
   onVotingCountdownComplete,
@@ -49,6 +54,8 @@ export function GameView({
   const [transitionPhase, setTransitionPhase] = useState<'night' | 'day'>('night');
   const [showVotingSummary, setShowVotingSummary] = useState(false);
   const [isAdvancingFromSummary, setIsAdvancingFromSummary] = useState(false);
+  const [showSummaryCountdown, setShowSummaryCountdown] = useState(false);
+  const [showNightTransitionCountdown, setShowNightTransitionCountdown] = useState(false);
   const prevPhaseRef = useRef(gameState.phase);
   const countdownKeyRef = useRef(`${gameState.phase}-${gameState.day_number}`);
 
@@ -158,39 +165,69 @@ export function GameView({
         />
       )}
 
-      {/* Voting Summary - show when voting countdown completes, host controls advance */}
-      {showVotingSummary && (
-        <VotingSummary
-          votes={votes}
-          roomPlayers={roomPlayers}
-          isHost={isHost}
-          isAdvancing={isAdvancingFromSummary}
-          onContinue={async () => {
+      {/* Summary Countdown - 3-2-1 before showing voting summary */}
+      {showSummaryCountdown && (
+        <CountdownOverlay 
+          seconds={3} 
+          onComplete={() => {
+            setShowSummaryCountdown(false);
+            setShowVotingSummary(true);
+          }}
+          message="Tallying votes..."
+          countdownKey={`summary-${gameState.day_number}`}
+          phase="day_voting"
+        />
+      )}
+
+      {/* Night Transition Countdown - 3-2-1 before transitioning to night */}
+      {showNightTransitionCountdown && (
+        <CountdownOverlay 
+          seconds={3} 
+          onComplete={() => {
+            setShowNightTransitionCountdown(false);
             setIsAdvancingFromSummary(true);
             onVotingCountdownComplete?.(true);
             setShowVotingSummary(false);
             setIsAdvancingFromSummary(false);
           }}
+          message="Night falls..."
+          countdownKey={`night-transition-${gameState.day_number}`}
+          phase="night"
+        />
+      )}
+
+      {/* Voting Summary - show after summary countdown, host controls advance */}
+      {showVotingSummary && !showNightTransitionCountdown && (
+        <VotingSummary
+          votes={votes}
+          roomPlayers={roomPlayers}
+          isHost={isHost}
+          isAdvancing={isAdvancingFromSummary}
+          onContinue={() => {
+            setShowNightTransitionCountdown(true);
+          }}
         />
       )}
 
       {/* Night Countdown Overlay - show for all; only host advances */}
-      {showNightCountdown && !showVotingSummary && (
+      {showNightCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && (
         <CountdownOverlay 
           seconds={3} 
           onComplete={() => onNightCountdownComplete?.(isHost)}
           message="All night actions complete!"
           countdownKey={countdownKeyRef.current}
+          phase="night"
         />
       )}
       
-      {/* Voting Countdown Overlay - transitions to summary screen */}
-      {showVotingCountdown && !showVotingSummary && (
+      {/* Voting Countdown Overlay - triggers summary countdown instead of direct summary */}
+      {showVotingCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={() => setShowVotingSummary(true)}
+          onComplete={() => setShowSummaryCountdown(true)}
           message="All votes are in!"
           countdownKey={countdownKeyRef.current}
+          phase="day_voting"
         />
       )}
       
@@ -261,6 +298,19 @@ export function GameView({
               isNight={isNight}
               isAlive={isAlive}
             />
+            
+            {/* Host End Game Button */}
+            {isHost && onEndGame && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onEndGame}
+                className="w-full mt-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                End Game
+              </Button>
+            )}
           </div>
         </div>
       </div>

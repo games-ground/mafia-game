@@ -238,6 +238,22 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
       .delete()
       .eq('room_id', room.id)
       .eq('player_id', playerId);
+
+    // Check if room is now empty and delete if so
+    const { count } = await supabase
+      .from('room_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', room.id);
+
+    if (count === 0) {
+      // Delete room and all related data
+      await supabase.from('game_actions').delete().eq('room_id', room.id);
+      await supabase.from('votes').delete().eq('room_id', room.id);
+      await supabase.from('messages').delete().eq('room_id', room.id);
+      await supabase.from('game_state').delete().eq('room_id', room.id);
+      await supabase.from('kicked_players').delete().eq('room_id', room.id);
+      await supabase.from('rooms').delete().eq('id', room.id);
+    }
   }
 
   async function toggleReady() {

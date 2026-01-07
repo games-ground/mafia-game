@@ -518,7 +518,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }
 
-  async function endGame(winner: 'mafia' | 'civilians') {
+  async function endGame(winner: 'mafia' | 'civilians' | null) {
     if (!gameState || !roomId) return;
 
     await supabase
@@ -535,15 +535,23 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       .update({ status: 'finished' })
       .eq('id', roomId);
 
-    const winMessage = winner === 'mafia'
-      ? '🔪 The Mafia has taken over the town! Mafia wins!'
-      : '🎉 The town has eliminated all the Mafia! Civilians win!';
+    if (winner) {
+      const winMessage = winner === 'mafia'
+        ? '🔪 The Mafia has taken over the town! Mafia wins!'
+        : '🎉 The town has eliminated all the Mafia! Civilians win!';
 
-    await supabase.from('messages').insert({
-      room_id: roomId,
-      content: winMessage,
-      is_system: true,
-    });
+      await supabase.from('messages').insert({
+        room_id: roomId,
+        content: winMessage,
+        is_system: true,
+      });
+    } else {
+      await supabase.from('messages').insert({
+        room_id: roomId,
+        content: '🛑 The game has been ended by the host.',
+        is_system: true,
+      });
+    }
   }
 
   async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }, hostPlayerId?: string) {
@@ -615,6 +623,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     submitNightAction,
     submitVote,
     advancePhase,
+    endGame,
     handleVotingCountdownComplete,
     handleNightCountdownComplete,
     refetch: fetchGameState,

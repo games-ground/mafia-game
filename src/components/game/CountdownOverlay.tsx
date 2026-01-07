@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Moon, Sun } from 'lucide-react';
+
+type Phase = 'night' | 'day_discussion' | 'day_voting' | 'lobby' | 'game_over';
 
 interface CountdownOverlayProps {
   seconds: number;
   onComplete: () => void;
   message?: string;
-  countdownKey?: string; // Unique key to prevent re-counting
+  countdownKey?: string;
+  phase?: Phase;
 }
 
 export function CountdownOverlay({ 
   seconds, 
   onComplete, 
   message = "Phase ending",
-  countdownKey 
+  countdownKey,
+  phase = 'night'
 }: CountdownOverlayProps) {
   const [count, setCount] = useState(seconds);
   const [isWaitingForServer, setIsWaitingForServer] = useState(false);
@@ -49,22 +53,52 @@ export function CountdownOverlay({
     return () => clearTimeout(timer);
   }, [count, onComplete, isWaitingForServer]);
 
+  // Phase-specific background colors (opaque)
+  const getPhaseBackground = () => {
+    switch (phase) {
+      case 'night':
+        return 'bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-900';
+      case 'day_voting':
+        return 'bg-gradient-to-b from-amber-950 via-orange-950 to-amber-900';
+      case 'day_discussion':
+        return 'bg-gradient-to-b from-amber-100 via-orange-100 to-amber-200';
+      default:
+        return 'bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900';
+    }
+  };
+
+  const isNight = phase === 'night';
+  const textColor = isNight || phase === 'day_voting' ? 'text-foreground' : 'text-slate-900';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+    <div className={cn(
+      "fixed inset-0 z-50 flex items-center justify-center animate-fade-in",
+      getPhaseBackground()
+    )}>
+      {/* Phase icon */}
+      <div className="absolute top-8 left-1/2 -translate-x-1/2">
+        {isNight ? (
+          <Moon className={cn("w-12 h-12 text-indigo-300 opacity-50")} />
+        ) : (
+          <Sun className={cn("w-12 h-12", phase === 'day_voting' ? 'text-orange-300' : 'text-amber-500', "opacity-50")} />
+        )}
+      </div>
+
       <div className="text-center">
-        <p className="text-muted-foreground text-lg mb-4">{message}</p>
+        <p className={cn("text-lg mb-4 opacity-80", textColor)}>{message}</p>
         {isWaitingForServer ? (
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-16 h-16 text-primary animate-spin" />
-            <p className="text-muted-foreground">Processing...</p>
+            <p className={cn("opacity-80", textColor)}>Processing...</p>
           </div>
         ) : (
           <div 
             className={cn(
               "font-display text-9xl font-bold transition-all duration-300",
-              count === 3 && "text-warning scale-100",
-              count === 2 && "text-warning scale-110",
-              count === 1 && "text-destructive scale-125 animate-pulse"
+              textColor,
+              count === 3 && "scale-100 opacity-100",
+              count === 2 && "scale-110 opacity-100",
+              count === 1 && "scale-125 animate-pulse"
             )}
           >
             {count}

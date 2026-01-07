@@ -11,6 +11,7 @@ import { RoleDisplay } from './RoleDisplay';
 import { SpectatorPanel } from './SpectatorPanel';
 import { CountdownOverlay } from './CountdownOverlay';
 import { PhaseTransition } from './PhaseTransition';
+import { VotingSummary } from './VotingSummary';
 interface GameViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
@@ -46,7 +47,10 @@ export function GameView({
   const [showRole, setShowRole] = useState(true);
   const [showPhaseTransition, setShowPhaseTransition] = useState(false);
   const [transitionPhase, setTransitionPhase] = useState<'night' | 'day'>('night');
+  const [showVotingSummary, setShowVotingSummary] = useState(false);
+  const [isAdvancingFromSummary, setIsAdvancingFromSummary] = useState(false);
   const prevPhaseRef = useRef(gameState.phase);
+  const countdownKeyRef = useRef(`${gameState.phase}-${gameState.day_number}`);
 
   const isNight = gameState.phase === 'night';
   const isVoting = gameState.phase === 'day_voting';
@@ -154,21 +158,39 @@ export function GameView({
         />
       )}
 
+      {/* Voting Summary - show when voting countdown completes, host controls advance */}
+      {showVotingSummary && (
+        <VotingSummary
+          votes={votes}
+          roomPlayers={roomPlayers}
+          isHost={isHost}
+          isAdvancing={isAdvancingFromSummary}
+          onContinue={async () => {
+            setIsAdvancingFromSummary(true);
+            onVotingCountdownComplete?.(true);
+            setShowVotingSummary(false);
+            setIsAdvancingFromSummary(false);
+          }}
+        />
+      )}
+
       {/* Night Countdown Overlay - show for all; only host advances */}
-      {showNightCountdown && (
+      {showNightCountdown && !showVotingSummary && (
         <CountdownOverlay 
           seconds={3} 
           onComplete={() => onNightCountdownComplete?.(isHost)}
           message="All night actions complete!"
+          countdownKey={countdownKeyRef.current}
         />
       )}
       
-      {/* Voting Countdown Overlay - show for all; only host advances */}
-      {showVotingCountdown && (
+      {/* Voting Countdown Overlay - transitions to summary screen */}
+      {showVotingCountdown && !showVotingSummary && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={() => onVotingCountdownComplete?.(isHost)}
+          onComplete={() => setShowVotingSummary(true)}
           message="All votes are in!"
+          countdownKey={countdownKeyRef.current}
         />
       )}
       
@@ -179,7 +201,7 @@ export function GameView({
         </div>
       )}
 
-      <div className="relative z-10 container mx-auto px-4 py-4 min-h-screen flex flex-col">
+      <div className="relative z-10 container mx-auto px-2 sm:px-4 py-2 sm:py-4 min-h-screen flex flex-col">
         {/* Phase Header - Always at top, no timer, no detective result */}
         <PhaseHeader
           phase={gameState.phase}
@@ -196,7 +218,7 @@ export function GameView({
         )}
 
         {/* Main Content Area - Adaptive based on phase */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4 mt-2 sm:mt-4">
           {/* Left: Main Action Area */}
           <div className="lg:col-span-2 space-y-4">
             {/* Player List with Actions */}

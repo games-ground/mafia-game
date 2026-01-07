@@ -103,6 +103,26 @@ export default function Home() {
               </div>
             ) : (
               <>
+                {/* Rename option */}
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/30 border border-border/50">
+                  <Input
+                    placeholder="Change nickname..."
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    className="bg-input border-border text-foreground placeholder:text-muted-foreground flex-1 text-sm"
+                    maxLength={20}
+                  />
+                  <Button
+                    onClick={handleSetNickname}
+                    variant="ghost"
+                    size="sm"
+                    disabled={!nickname.trim() || nickname.trim() === player?.nickname}
+                    className="shrink-0"
+                  >
+                    Rename
+                  </Button>
+                </div>
+
                 <div className="space-y-3">
                   <Button
                     onClick={handleCreateRoom}

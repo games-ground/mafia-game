@@ -78,33 +78,33 @@ export function PhaseHeader({
 
   return (
     <div className={cn(
-      "rounded-xl p-4 border-2 transition-all duration-500",
+      "rounded-xl p-2 sm:p-4 border-2 transition-all duration-500",
       current.bgClass,
       current.borderClass
     )}>
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2">
         {/* Phase Info */}
-        <div className="flex items-center gap-4">
-          <div className={cn("p-3 rounded-full", current.iconBg)}>
-            <Icon className={cn("w-6 h-6", current.textClass)} />
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className={cn("p-2 sm:p-3 rounded-full shrink-0", current.iconBg)}>
+            <Icon className={cn("w-4 h-4 sm:w-6 sm:h-6", current.textClass)} />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Day {dayNumber}</span>
-              <span className="text-xs text-muted-foreground">•</span>
-              <h2 className={cn("font-display text-lg font-bold uppercase tracking-wider", current.textClass)}>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+              <span className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">Day {dayNumber}</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">•</span>
+              <h2 className={cn("font-display text-sm sm:text-lg font-bold uppercase tracking-wider", current.textClass)}>
                 {current.label}
               </h2>
             </div>
-            <p className="text-sm text-muted-foreground">{current.subtitle}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">{current.subtitle}</p>
           </div>
         </div>
 
         {/* Timer - only show if showTimer is true */}
         {showTimer && phase !== 'lobby' && phase !== 'game_over' && (
-          <div className="text-center">
+          <div className="text-center shrink-0">
             <p className={cn(
-              "font-display text-2xl font-bold tabular-nums",
+              "font-display text-lg sm:text-2xl font-bold tabular-nums",
               timeLeft <= 10 ? 'text-destructive animate-pulse' : current.textClass
             )}>
               {formatTime(timeLeft)}

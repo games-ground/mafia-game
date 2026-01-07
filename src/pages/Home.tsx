@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRoom } from '@/hooks/useRoom';
-import { Skull, Users } from 'lucide-react';
+import { Skull, Users, Pencil, Check, X } from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -16,10 +16,31 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editNickname, setEditNickname] = useState('');
 
   const handleSetNickname = async () => {
     if (!nickname.trim()) return;
     await updateNickname(nickname.trim());
+  };
+
+  const handleSaveNickname = async () => {
+    if (!editNickname.trim() || editNickname.trim() === player?.nickname) {
+      setIsEditing(false);
+      return;
+    }
+    await updateNickname(editNickname.trim());
+    setIsEditing(false);
+  };
+
+  const handleStartEditing = () => {
+    setEditNickname(player?.nickname || '');
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+    setEditNickname('');
   };
 
   const handleCreateRoom = async () => {
@@ -80,7 +101,53 @@ export default function Home() {
         <Card className="w-full max-w-md glass-card animate-slide-up">
           <CardHeader>
             <CardTitle className="font-display text-center text-xl">
-              {player?.nickname === 'Anonymous' ? 'Enter Your Name' : `Welcome, ${player?.nickname}`}
+              {player?.nickname === 'Anonymous' ? 'Enter Your Name' : (
+                <div className="flex items-center justify-center gap-2">
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 w-full">
+                      <Input
+                        value={editNickname}
+                        onChange={(e) => setEditNickname(e.target.value)}
+                        className="text-center text-lg"
+                        maxLength={20}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveNickname();
+                          if (e.key === 'Escape') handleCancelEditing();
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleSaveNickname}
+                        className="text-success hover:text-success hover:bg-success/10 shrink-0"
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCancelEditing}
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>Welcome, {player?.nickname}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleStartEditing}
+                        className="text-muted-foreground hover:text-foreground h-8 w-8"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -103,26 +170,6 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {/* Rename option */}
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/30 border border-border/50">
-                  <Input
-                    placeholder="Change nickname..."
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    className="bg-input border-border text-foreground placeholder:text-muted-foreground flex-1 text-sm"
-                    maxLength={20}
-                  />
-                  <Button
-                    onClick={handleSetNickname}
-                    variant="ghost"
-                    size="sm"
-                    disabled={!nickname.trim() || nickname.trim() === player?.nickname}
-                    className="shrink-0"
-                  >
-                    Rename
-                  </Button>
-                </div>
-
                 <div className="space-y-3">
                   <Button
                     onClick={handleCreateRoom}

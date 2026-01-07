@@ -42,6 +42,7 @@ export default function Room() {
     submitNightAction,
     submitVote,
     advancePhase,
+    endGame,
     handleVotingCountdownComplete,
     handleNightCountdownComplete,
   } = useGameState(room?.id || null, currentRoomPlayer?.id || null, room, roomPlayers);
@@ -176,6 +177,7 @@ export default function Room() {
         onNightAction={submitNightAction}
         onVote={submitVote}
         onAdvancePhase={() => advancePhase(roomPlayers)}
+        onEndGame={() => endGame(null)}
         isHost={isHost}
         showVotingCountdown={showVotingCountdown}
         onVotingCountdownComplete={handleVotingCountdownComplete}

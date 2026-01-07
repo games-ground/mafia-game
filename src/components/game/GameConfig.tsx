@@ -160,12 +160,6 @@ export function GameConfig({ room, playerCount, onUpdateConfig }: GameConfigProp
           </div>
         </div>
 
-        {/* Game Rules Info */}
-        <div className="p-3 rounded-lg bg-secondary/30 border border-border/30 text-sm text-muted-foreground space-y-1">
-          <p>• Night ends when all roles complete their action</p>
-          <p>• Eliminated player roles are always revealed</p>
-          <p>• Voting shows who voted, not vote counts</p>
-        </div>
       </CardContent>
     </Card>
   );

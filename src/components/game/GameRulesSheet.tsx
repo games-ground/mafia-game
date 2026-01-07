@@ -111,6 +111,25 @@ export function GameRulesSheet() {
             </ul>
           </section>
 
+          {/* Game Settings */}
+          <section>
+            <h3 className="font-display text-base font-semibold text-foreground mb-2">Game Settings</h3>
+            <ul className="space-y-1 text-muted-foreground text-xs">
+              <li className="flex items-start gap-2">
+                <span className="text-accent">•</span>
+                <span>Night ends when all roles complete their action</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent">•</span>
+                <span>Eliminated player roles are always revealed</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent">•</span>
+                <span>Voting shows who voted, not vote counts</span>
+              </li>
+            </ul>
+          </section>
+
           {/* Tips */}
           <section className="p-3 rounded-lg bg-secondary/30 border border-border/30">
             <h3 className="font-display text-sm font-semibold text-foreground mb-2">💡 Tips</h3>

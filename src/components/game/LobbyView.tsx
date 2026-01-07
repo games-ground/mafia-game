@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Room, RoomPlayer, Player } from '@/types/game';
-import { Copy, Crown, UserMinus, Users, Check, Loader2, Clock } from 'lucide-react';
+import { Copy, Crown, UserMinus, Users, Check, Loader2, Clock, DoorOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { GameConfig } from './GameConfig';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -194,7 +194,7 @@ export function LobbyView({
           )}
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-3">
+          <div className="space-y-3">
             {isHost ? (
               <LoadingButton
                 onClick={handleStartGame}
@@ -217,25 +217,45 @@ export function LobbyView({
                 Joining...
               </LoadingButton>
             ) : (
-              <LoadingButton
-                onClick={handleToggleReady}
-                variant={currentRoomPlayer?.is_ready ? 'secondary' : 'default'}
-                loading={isReadyLoading}
-                loadingText={currentRoomPlayer?.is_ready ? 'Cancelling...' : 'Readying up...'}
-                className="w-full hover-glow"
-                size="lg"
-              >
-                {currentRoomPlayer?.is_ready ? 'Cancel Ready' : 'Ready Up'}
-              </LoadingButton>
+              <div className="flex gap-3">
+                <LoadingButton
+                  onClick={handleToggleReady}
+                  variant={currentRoomPlayer?.is_ready ? 'outline' : 'default'}
+                  loading={isReadyLoading}
+                  loadingText={currentRoomPlayer?.is_ready ? 'Cancelling...' : 'Readying up...'}
+                  className={cn(
+                    "flex-1 transition-all",
+                    currentRoomPlayer?.is_ready 
+                      ? "border-muted-foreground/30 text-muted-foreground hover:border-foreground hover:text-foreground" 
+                      : "hover-glow"
+                  )}
+                  size="lg"
+                >
+                  {currentRoomPlayer?.is_ready ? 'Cancel Ready' : 'Ready Up'}
+                </LoadingButton>
+                
+                <Button
+                  variant="ghost"
+                  onClick={onLeave}
+                  size="lg"
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-4"
+                  title="Leave Room"
+                >
+                  <DoorOpen className="w-5 h-5" />
+                </Button>
+              </div>
             )}
             
-            <Button
-              variant="ghost"
-              onClick={onLeave}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              Leave Room
-            </Button>
+            {isHost && (
+              <Button
+                variant="ghost"
+                onClick={onLeave}
+                className="w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              >
+                <DoorOpen className="w-4 h-4 mr-2" />
+                Leave Room
+              </Button>
+            )}
           </div>
         </div>
       </div>

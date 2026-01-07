@@ -14,26 +14,26 @@ export function VotingPanel({ hasVoted, votes, alivePlayers }: VotingPanelProps)
 
   return (
     <Card className="glass-card border-warning/30">
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <CardContent className="pt-4 sm:pt-6 pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             {hasVoted ? (
-              <Check className="w-6 h-6 text-success" />
+              <Check className="w-5 h-5 sm:w-6 sm:h-6 text-success shrink-0" />
             ) : (
-              <VoteIcon className="w-6 h-6 text-warning animate-pulse" />
+              <VoteIcon className="w-5 h-5 sm:w-6 sm:h-6 text-warning animate-pulse shrink-0" />
             )}
-            <div>
-              <p className="font-display font-bold text-warning">
+            <div className="min-w-0">
+              <p className="font-display font-bold text-warning text-sm sm:text-base">
                 Town Vote
               </p>
-              <p className="text-sm text-muted-foreground">
-                {hasVoted ? 'Vote submitted' : 'Select a player to vote for elimination'}
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                {hasVoted ? 'Vote submitted' : 'Vote to eliminate'}
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="font-display text-lg font-bold">{votedCount}/{totalVoters}</p>
-            <p className="text-xs text-muted-foreground">votes cast</p>
+          <div className="text-right shrink-0">
+            <p className="font-display text-base sm:text-lg font-bold">{votedCount}/{totalVoters}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">votes</p>
           </div>
         </div>
       </CardContent>

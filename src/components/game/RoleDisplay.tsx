@@ -75,25 +75,25 @@ export function RoleDisplay({ role, isAlive }: RoleDisplayProps) {
 
   return (
     <div className={cn(
-      "rounded-xl p-4 mt-4 border-2 transition-all duration-300",
+      "rounded-xl p-2 sm:p-4 mt-2 sm:mt-4 border-2 transition-all duration-300",
       styles.bg,
       styles.border
     )}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={cn("p-3 rounded-full", styles.badgeBg)}>
-            <Icon className={cn("w-6 h-6", styles.text)} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className={cn("p-2 sm:p-3 rounded-full shrink-0", styles.badgeBg)}>
+            <Icon className={cn("w-4 h-4 sm:w-6 sm:h-6", styles.text)} />
           </div>
           
-          <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Role</span>
-            <div className="flex items-center gap-3">
-              <span className={cn("font-display text-xl font-bold uppercase tracking-wide", styles.text)}>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Your Role</span>
+            <div className="flex items-center gap-1 sm:gap-3 flex-wrap">
+              <span className={cn("font-display text-base sm:text-xl font-bold uppercase tracking-wide", styles.text)}>
                 {isVisible ? info.name : 'Hidden'}
               </span>
               {!isAlive && (
-                <Badge variant="destructive" className="text-xs">
-                  <Skull className="w-3 h-3 mr-1" />
+                <Badge variant="destructive" className="text-[10px] sm:text-xs px-1 py-0">
+                  <Skull className="w-2 h-2 sm:w-3 sm:h-3 mr-0.5" />
                   Dead
                 </Badge>
               )}
@@ -104,19 +104,19 @@ export function RoleDisplay({ role, isAlive }: RoleDisplayProps) {
         <button
           onClick={() => setIsVisible(!isVisible)}
           className={cn(
-            "p-3 rounded-full transition-colors",
+            "p-2 sm:p-3 rounded-full transition-colors shrink-0",
             isVisible 
               ? "hover:bg-secondary/50 text-muted-foreground hover:text-foreground" 
               : "bg-primary/10 text-primary hover:bg-primary/20"
           )}
           title={isVisible ? "Hide role" : "Show role"}
         >
-          {isVisible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          {isVisible ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
       </div>
 
       {isVisible && (
-        <p className="text-sm text-muted-foreground mt-3 pl-16">
+        <p className="text-xs sm:text-sm text-muted-foreground mt-2 sm:mt-3 pl-8 sm:pl-16 hidden sm:block">
           {info.description}
         </p>
       )}

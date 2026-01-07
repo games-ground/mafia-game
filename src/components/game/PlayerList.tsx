@@ -95,14 +95,9 @@ export function PlayerList({
       const config = actionConfig[currentRole];
       if (!config) return null;
 
-      // If already acted, show "Done" badge without button
+      // If already acted, show nothing (no "Submitted" pill)
       if (hasAlreadyActed) {
-        return (
-          <Badge variant="secondary" className="bg-primary/20 text-primary">
-            <Check className="w-3 h-3 mr-1" />
-            Submitted
-          </Badge>
-        );
+        return null;
       }
 
       return (
@@ -115,19 +110,19 @@ export function PlayerList({
             setConfirmTarget({ id: player.id, name: player.player.nickname });
           }}
           className={cn(
-            'min-w-[80px]',
+            'min-w-[60px] sm:min-w-[80px] text-xs sm:text-sm px-2 sm:px-3',
             isSelected && 'bg-primary'
           )}
         >
           {isSelected ? (
             <>
-              <Check className="w-4 h-4 mr-1" />
+              <Check className="w-3 h-3 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               Done
             </>
           ) : (
             <>
               {config.icon}
-              <span className="ml-1">{config.label}</span>
+              <span className="ml-0.5 sm:ml-1">{config.label}</span>
             </>
           )}
         </Button>
@@ -169,22 +164,22 @@ export function PlayerList({
 
   return (
     <>
-      <div className="glass-card rounded-lg p-4">
-        <h3 className="font-display text-lg mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5" />
+      <div className="glass-card rounded-lg p-2 sm:p-4">
+        <h3 className="font-display text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
+          <Target className="w-4 h-4 sm:w-5 sm:h-5" />
           Players
         </h3>
 
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-border/50 text-left">
-                <th className="pb-3 font-display text-muted-foreground text-sm w-[40%]">Player</th>
-                <th className="pb-3 font-display text-muted-foreground text-sm w-[20%] text-center">Status</th>
+                <th className="pb-2 sm:pb-3 font-display text-muted-foreground text-xs sm:text-sm pl-2">Player</th>
+                <th className="pb-2 sm:pb-3 font-display text-muted-foreground text-xs sm:text-sm text-center hidden sm:table-cell">Status</th>
                 {isVoting && (
-                  <th className="pb-3 font-display text-muted-foreground text-sm w-[15%] text-center">Voted</th>
+                  <th className="pb-2 sm:pb-3 font-display text-muted-foreground text-xs sm:text-sm text-center">Voted</th>
                 )}
-                <th className="pb-3 font-display text-muted-foreground text-sm w-[25%] text-right">Action</th>
+                <th className="pb-2 sm:pb-3 font-display text-muted-foreground text-xs sm:text-sm text-right pr-2">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -206,37 +201,54 @@ export function PlayerList({
                       isMafiaPartner && 'bg-mafia/5'
                     )}
                   >
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'font-body font-semibold',
-                            !player.is_alive && 'line-through text-muted-foreground',
-                            showAsMafia && 'text-mafia'
+                    <td className="py-2 sm:py-3 pl-2 pr-2">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span
+                            className={cn(
+                              'font-body font-semibold text-sm sm:text-base truncate max-w-[100px] sm:max-w-none',
+                              !player.is_alive && 'line-through text-muted-foreground',
+                              showAsMafia && 'text-mafia'
+                            )}
+                          >
+                            {player.player.nickname}
+                          </span>
+                          {isMe && (
+                            <Badge variant="outline" className="text-[10px] sm:text-xs px-1 py-0">
+                              You
+                            </Badge>
                           )}
-                        >
-                          {player.player.nickname}
-                        </span>
-                        {isMe && (
-                          <Badge variant="outline" className="text-xs">
-                            <User className="w-3 h-3 mr-1" />
-                            You
-                          </Badge>
-                        )}
-                        {isMafiaPartner && (
-                          <Badge className="bg-mafia/20 text-mafia border-mafia/30 text-xs">
-                            <Skull className="w-3 h-3 mr-1" />
-                            Ally
-                          </Badge>
-                        )}
-                        {showAsMafia && isMe && (
-                          <Badge className="bg-mafia text-mafia-foreground text-xs">
-                            Mafia
-                          </Badge>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {isMafiaPartner && (
+                            <Badge className="bg-mafia/20 text-mafia border-mafia/30 text-[10px] sm:text-xs px-1 py-0">
+                              <Skull className="w-2 h-2 sm:w-3 sm:h-3 mr-0.5" />
+                              Ally
+                            </Badge>
+                          )}
+                          {showAsMafia && isMe && (
+                            <Badge className="bg-mafia text-mafia-foreground text-[10px] sm:text-xs px-1 py-0">
+                              Mafia
+                            </Badge>
+                          )}
+                          {/* Mobile: Show status inline */}
+                          <span className="sm:hidden">
+                            {player.is_alive ? (
+                              <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1 py-0">
+                                Alive
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-destructive/20 text-destructive border-destructive/30 text-[10px] px-1 py-0">
+                                <Skull className="w-2 h-2 mr-0.5" />
+                                Dead
+                              </Badge>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-3 pr-4 text-center">
+                    {/* Desktop Status Column */}
+                    <td className="py-2 sm:py-3 pr-2 text-center hidden sm:table-cell">
                       {player.is_alive ? (
                         <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30">
                           Alive
@@ -249,13 +261,13 @@ export function PlayerList({
                       )}
                     </td>
                     {isVoting && (
-                      <td className="py-3 text-center">
+                      <td className="py-2 sm:py-3 text-center">
                         {player.is_alive && hasVoted && (
-                          <ThumbsUp className="w-4 h-4 text-success mx-auto" />
+                          <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4 text-success mx-auto" />
                         )}
                       </td>
                     )}
-                    <td className="py-3 text-right">
+                    <td className="py-2 sm:py-3 text-right pr-2">
                       {getActionButton(player)}
                     </td>
                   </tr>

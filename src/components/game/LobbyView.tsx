@@ -226,7 +226,7 @@ export function LobbyView({
                   className={cn(
                     "flex-1 transition-all",
                     currentRoomPlayer?.is_ready 
-                      ? "border-muted-foreground/30 text-muted-foreground hover:border-foreground hover:text-foreground" 
+                      ? "border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent" 
                       : "hover-glow"
                   )}
                   size="lg"

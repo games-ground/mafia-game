@@ -170,6 +170,19 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
       return false;
     }
 
+    // Check if player was kicked from this room
+    const { data: kickedData } = await supabase
+      .from('kicked_players')
+      .select('id')
+      .eq('room_id', roomData.id)
+      .eq('player_id', joinPlayerId)
+      .single();
+
+    if (kickedData) {
+      setError('You were kicked from this room');
+      return false;
+    }
+
     // Check if player is already in the room (rejoin scenario)
     const { data: existingPlayer } = await supabase
       .from('room_players')

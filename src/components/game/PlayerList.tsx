@@ -176,17 +176,15 @@ export function PlayerList({
         </h3>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead>
               <tr className="border-b border-border/50 text-left">
-                <th className="pb-3 font-display text-muted-foreground text-sm">Player</th>
-                <th className="pb-3 font-display text-muted-foreground text-sm">Status</th>
+                <th className="pb-3 font-display text-muted-foreground text-sm w-[40%]">Player</th>
+                <th className="pb-3 font-display text-muted-foreground text-sm w-[20%] text-center">Status</th>
                 {isVoting && (
-                  <th className="pb-3 font-display text-muted-foreground text-sm text-center">Voted</th>
+                  <th className="pb-3 font-display text-muted-foreground text-sm w-[15%] text-center">Voted</th>
                 )}
-                {canSelect && (
-                  <th className="pb-3 font-display text-muted-foreground text-sm text-right">Action</th>
-                )}
+                <th className="pb-3 font-display text-muted-foreground text-sm w-[25%] text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -238,7 +236,7 @@ export function PlayerList({
                         )}
                       </div>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 text-center">
                       {player.is_alive ? (
                         <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30">
                           Alive
@@ -257,11 +255,9 @@ export function PlayerList({
                         )}
                       </td>
                     )}
-                    {canSelect && (
-                      <td className="py-3 text-right">
-                        {getActionButton(player)}
-                      </td>
-                    )}
+                    <td className="py-3 text-right">
+                      {getActionButton(player)}
+                    </td>
                   </tr>
                 );
               })}

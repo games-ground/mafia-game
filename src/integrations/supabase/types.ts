@@ -190,6 +190,42 @@ export type Database = {
           },
         ]
       }
+      kicked_players: {
+        Row: {
+          id: string
+          kicked_at: string
+          player_id: string
+          room_id: string
+        }
+        Insert: {
+          id?: string
+          kicked_at?: string
+          player_id: string
+          room_id: string
+        }
+        Update: {
+          id?: string
+          kicked_at?: string
+          player_id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kicked_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kicked_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
@@ -299,6 +335,7 @@ export type Database = {
           is_alive: boolean
           is_ready: boolean
           joined_at: string
+          kicked: boolean
           player_id: string
           role: Database["public"]["Enums"]["role_type"] | null
           room_id: string
@@ -308,6 +345,7 @@ export type Database = {
           is_alive?: boolean
           is_ready?: boolean
           joined_at?: string
+          kicked?: boolean
           player_id: string
           role?: Database["public"]["Enums"]["role_type"] | null
           room_id: string
@@ -317,6 +355,7 @@ export type Database = {
           is_alive?: boolean
           is_ready?: boolean
           joined_at?: string
+          kicked?: boolean
           player_id?: string
           role?: Database["public"]["Enums"]["role_type"] | null
           room_id?: string

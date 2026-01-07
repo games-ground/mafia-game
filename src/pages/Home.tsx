@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRoom } from '@/hooks/useRoom';
-import { Skull, Users, BarChart3 } from 'lucide-react';
+import { Skull, Users } from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -146,14 +146,6 @@ export default function Home() {
                   <p className="text-destructive text-sm text-center">{error}</p>
                 )}
 
-                <Button
-                  variant="ghost"
-                  onClick={() => navigate('/stats')}
-                  className="w-full text-muted-foreground hover:text-foreground"
-                >
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  View Stats
-                </Button>
               </>
             )}
           </CardContent>

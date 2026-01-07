@@ -3,7 +3,7 @@ import { Room, RoomPlayer, GameState, Vote, RoleType, Player } from '@/types/gam
 import { cn } from '@/lib/utils';
 import { PhaseHeader } from './PhaseHeader';
 import { PlayerList } from './PlayerList';
-import { NightActions } from './NightActions';
+
 import { VotingPanel } from './VotingPanel';
 import { ChatPanel } from './ChatPanel';
 import { RoleCard } from './RoleCard';
@@ -180,14 +180,6 @@ export function GameView({
               currentRole={role}
               gameState={gameState}
             />
-
-            {/* Phase-specific instructions */}
-            {isNight && isAlive && (
-              <NightActions
-                role={role}
-                hasActed={!!selectedTarget || !!hasActedThisNight}
-              />
-            )}
 
             {isVoting && isAlive && (
               <VotingPanel

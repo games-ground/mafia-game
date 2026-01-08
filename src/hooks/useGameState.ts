@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GameState, RoomPlayer, RoleType, Vote, Player, Room } from '@/types/game';
 
-export function useGameState(roomId: string | null, currentRoomPlayerId: string | null, room?: Room | null, roomPlayers?: (RoomPlayer & { player: Player })[]) {
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+export function useGameState(roomId: string | null, currentRoomPlayerId: string | null, room?: Room | null, roomPlayers?: (RoomPlayer & { player: Player })[], playerId?: string | null) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,12 +88,9 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   }, [roomId, fetchVotes]);
 
   // Check if all night actions are complete based on game_state targets
-  // We determine which roles SHOULD act by checking if their targets are set
-  // The game_state fields tell us which actions are needed and which are done
   const checkNightActionsComplete = useCallback(async (): Promise<boolean> => {
     if (!gameState || gameState.phase !== 'night' || !roomId) return false;
 
-    // Fetch fresh role status from database to check which roles are alive
     const { data: alivePlayers, error } = await supabase
       .from('room_players')
       .select('role')
@@ -125,7 +124,6 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       return;
     }
 
-    // Only check when a target is actually set (not on initial load)
     const hasAnyTarget = gameState.mafia_target_id !== null || 
                          gameState.doctor_target_id !== null || 
                          gameState.detective_target_id !== null;
@@ -140,176 +138,92 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }, [gameState?.phase, gameState?.mafia_target_id, gameState?.doctor_target_id, gameState?.detective_target_id, showNightCountdown, checkNightActionsComplete]);
 
+  // SECURE: Start game via edge function
   async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
-    if (!roomId) return;
+    if (!roomId || !playerId) return;
 
-    // Assign roles based on config
-    const roles = assignRoles(roomPlayers.length, roomConfig);
-    const shuffledPlayers = [...roomPlayers].sort(() => Math.random() - 0.5);
-
-    // Update each player's role
-    for (let i = 0; i < shuffledPlayers.length; i++) {
-      await supabase
-        .from('room_players')
-        .update({ role: roles[i] })
-        .eq('id', shuffledPlayers[i].id);
-    }
-
-    // Update room status
-    await supabase
-      .from('rooms')
-      .update({ status: 'playing' })
-      .eq('id', roomId);
-
-    // Create game state - no phase_end_time since we're action-based only
-    await supabase.from('game_state').insert({
-      room_id: roomId,
-      phase: 'night',
-      day_number: 1,
-      phase_end_time: null,
-    });
-
-    // Add system message
-    await supabase.from('messages').insert({
-      room_id: roomId,
-      content: 'The game has begun! Night falls upon the town...',
-      is_system: true,
-    });
-  }
-
-  function assignRoles(playerCount: number, config: { mafia_count: number; doctor_count: number; detective_count: number }): RoleType[] {
-    const roles: RoleType[] = [];
-    
-    // Use configured role counts
-    const mafiaCount = Math.min(config.mafia_count, playerCount - 1);
-    const doctorCount = Math.min(config.doctor_count, playerCount - mafiaCount);
-    const detectiveCount = Math.min(config.detective_count, playerCount - mafiaCount - doctorCount);
-    
-    // Add mafia
-    for (let i = 0; i < mafiaCount; i++) {
-      roles.push('mafia');
-    }
-    
-    // Add special roles
-    for (let i = 0; i < doctorCount; i++) {
-      roles.push('doctor');
-    }
-    for (let i = 0; i < detectiveCount; i++) {
-      roles.push('detective');
-    }
-    
-    // Fill rest with civilians
-    while (roles.length < playerCount) {
-      roles.push('civilian');
-    }
-    
-    return roles;
-  }
-
-  async function submitNightAction(targetId: string, role: RoleType) {
-    if (!gameState || !currentRoomPlayerId || !roomPlayers) return;
-
-    const updateField = {
-      mafia: 'mafia_target_id',
-      doctor: 'doctor_target_id',
-      detective: 'detective_target_id',
-    }[role];
-
-    if (!updateField) return;
-
-    // PREVENT DUPLICATE ACTIONS: Check if this role has already acted this night
-    const existingTarget = gameState[updateField as keyof GameState];
-    if (existingTarget !== null) {
-      console.log(`${role} has already acted this night`);
-      return;
-    }
-
-    // Get target name for spectator mode
-    const target = roomPlayers.find(p => p.id === targetId);
-    const targetNameField = {
-      mafia: 'last_mafia_target_name',
-      doctor: 'last_doctor_target_name',
-      detective: 'last_detective_target_name',
-    }[role];
-
-    // Add target name for spectator visibility
-    let additionalUpdates: Record<string, string | null> = {};
-    if (targetNameField && target) {
-      additionalUpdates[targetNameField] = target.player.nickname;
-    }
-
-    // For detective, fetch role and send private immediate result
-    if (role === 'detective' && target) {
-      const { data: targetPlayer } = await supabase
-        .from('room_players')
-        .select('role')
-        .eq('id', targetId)
-        .single();
-      
-      if (targetPlayer) {
-        const isMafia = targetPlayer.role === 'mafia';
-        const nickname = target.player.nickname;
-        const resultMessage = isMafia
-          ? `🔍 Your investigation reveals that ${nickname} is MAFIA!`
-          : `🔍 Your investigation reveals that ${nickname} is NOT Mafia.`;
-
-        // Send immediately as detective-only system message
-        await supabase.from('messages').insert({
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/start-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           room_id: roomId,
-          content: resultMessage,
-          is_system: true,
-          is_mafia_only: false,
-          role_type: 'detective',
-        });
-      }
-    }
-
-    const { error } = await supabase
-      .from('game_state')
-      .update({ 
-        [updateField]: targetId,
-        ...additionalUpdates 
-      })
-      .eq('id', gameState.id);
-
-    if (error) {
-      console.error('Error submitting night action:', error);
-    }
-
-    // Log the action
-    await supabase.from('game_actions').insert({
-      room_id: gameState.room_id,
-      actor_id: currentRoomPlayerId,
-      action_type: `${role}_action`,
-      target_id: targetId,
-      day_number: gameState.day_number,
-      phase: gameState.phase,
-    });
-  }
-
-  async function submitVote(targetId: string | null) {
-    if (!gameState || !currentRoomPlayerId) return;
-
-    const { error } = await supabase
-      .from('votes')
-      .upsert({
-        room_id: gameState.room_id,
-        voter_id: currentRoomPlayerId,
-        target_id: targetId,
-        day_number: gameState.day_number,
-      }, {
-        onConflict: 'room_id,voter_id,day_number',
+          host_player_id: playerId,
+        }),
       });
 
-    if (error) {
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Error starting game:', result.error);
+      }
+    } catch (error) {
+      console.error('Error starting game:', error);
+    }
+  }
+
+  // SECURE: Submit night action via edge function
+  async function submitNightAction(targetId: string, role: RoleType) {
+    if (!gameState || !currentRoomPlayerId || !playerId) return;
+
+    const actionType = {
+      mafia: 'kill',
+      doctor: 'protect',
+      detective: 'investigate',
+    }[role] as 'kill' | 'protect' | 'investigate';
+
+    if (!actionType) return;
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/submit-night-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_id: gameState.room_id,
+          room_player_id: currentRoomPlayerId,
+          player_id: playerId,
+          target_id: targetId,
+          action_type: actionType,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Error submitting night action:', result.error);
+      }
+    } catch (error) {
+      console.error('Error submitting night action:', error);
+    }
+  }
+
+  // SECURE: Submit vote via edge function
+  async function submitVote(targetId: string | null) {
+    if (!gameState || !currentRoomPlayerId || !playerId) return;
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/submit-vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_id: gameState.room_id,
+          room_player_id: currentRoomPlayerId,
+          player_id: playerId,
+          target_id: targetId,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Error submitting vote:', result.error);
+      }
+    } catch (error) {
       console.error('Error submitting vote:', error);
     }
   }
 
-  async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[]) {
-    if (!gameState || !roomId) return;
+  // SECURE: Advance phase via edge function
+  async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[], force: boolean = false) {
+    if (!gameState || !roomId || !playerId) return;
     
-    // Prevent concurrent phase advances
     if (advancingPhaseRef.current) {
       console.log('Already advancing phase, skipping');
       return;
@@ -317,240 +231,47 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     advancingPhaseRef.current = true;
 
     try {
-      let newPhase = gameState.phase;
-      let newDayNumber = gameState.day_number;
-      let updates: Partial<GameState> = {};
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/advance-phase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_id: roomId,
+          player_id: playerId,
+          force,
+        }),
+      });
 
-      if (gameState.phase === 'night') {
-        // Resolve night actions FIRST
-        await resolveNightActions(roomPlayers);
-        newPhase = 'day_voting';
-        updates = {
-          mafia_target_id: null,
-          doctor_target_id: null,
-          detective_target_id: null,
-          detective_result: null,
-        };
-      } else if (gameState.phase === 'day_voting') {
-        // Resolve voting FIRST
-        await resolveVoting(roomPlayers);
-        newPhase = 'night';
-        newDayNumber = gameState.day_number + 1;
-        updates = {
-          last_mafia_target_name: null,
-          last_doctor_target_name: null,
-          last_detective_target_name: null,
-        };
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Error advancing phase:', result.error);
       }
-
-      // AFTER resolving actions, check win conditions with fresh data
-      const { data: freshPlayers, error: fetchError } = await supabase
-        .from('room_players')
-        .select('id, is_alive, role')
-        .eq('room_id', roomId);
-
-      if (fetchError) {
-        console.error('Error fetching players for win check:', fetchError);
-        return;
-      }
-
-      const alivePlayers = freshPlayers?.filter(p => p.is_alive) || [];
-      const aliveMafia = alivePlayers.filter(p => p.role === 'mafia');
-      const aliveTown = alivePlayers.filter(p => p.role !== 'mafia');
-
-      // Check win conditions after actions resolved
-      if (aliveMafia.length === 0) {
-        await endGame('civilians');
-        return;
-      }
-      if (aliveMafia.length >= aliveTown.length) {
-        await endGame('mafia');
-        return;
-      }
-
-      // No phase_end_time since we're action-based only
-      await supabase
-        .from('game_state')
-        .update({
-          phase: newPhase,
-          day_number: newDayNumber,
-          phase_end_time: null,
-          ...updates,
-        })
-        .eq('id', gameState.id);
+    } catch (error) {
+      console.error('Error advancing phase:', error);
     } finally {
       advancingPhaseRef.current = false;
     }
   }
 
-  async function resolveNightActions(roomPlayers: (RoomPlayer & { player: Player })[]) {
-    if (!gameState || !roomId) return;
-
-    const mafiaTarget = gameState.mafia_target_id;
-    const doctorTarget = gameState.doctor_target_id;
-    const detectiveTarget = gameState.detective_target_id;
-    const detectiveResult = gameState.detective_result;
-
-    // Fetch fresh player data with roles for death messages
-    const { data: freshPlayers, error } = await supabase
-      .from('room_players')
-      .select('id, role, player:players(nickname)')
-      .eq('room_id', roomId);
-
-    if (error) {
-      console.error('Error fetching players for night resolution:', error);
-      return;
-    }
-
-    // Detective result already sent immediately on action - nothing to do here
-
-    // Handle mafia kill
-    if (mafiaTarget && mafiaTarget !== doctorTarget) {
-      await supabase
-        .from('room_players')
-        .update({ is_alive: false })
-        .eq('id', mafiaTarget);
-
-      const victim = freshPlayers?.find(p => p.id === mafiaTarget);
-      if (victim) {
-        // Show only Mafia or Civilian - don't reveal exact role (detective/doctor)
-        const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
-        const nickname = (victim.player as any)?.nickname || 'Unknown';
-        
-        await supabase.from('messages').insert({
-          room_id: roomId,
-          content: `☠️ ${nickname} was found dead this morning. They were a ${displayRole}.`,
-          is_system: true,
-        });
-      }
-    } else if (mafiaTarget && mafiaTarget === doctorTarget) {
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: `🏥 Someone was attacked last night, but the Doctor saved them!`,
-        is_system: true,
-      });
-    } else {
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: `The night passes peacefully. No one was killed.`,
-        is_system: true,
-      });
-    }
-  }
-
-  async function resolveVoting(roomPlayers: (RoomPlayer & { player: Player })[]) {
-    if (!gameState || !roomId) return;
-
-    // Fetch fresh votes from database instead of using stale state
-    const { data: freshVotes, error: votesError } = await supabase
-      .from('votes')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('day_number', gameState.day_number);
-
-    if (votesError) {
-      console.error('Error fetching votes for resolution:', votesError);
-      return;
-    }
-
-    // Count votes - only count non-null target votes
-    const voteCounts: Record<string, number> = {};
-    for (const vote of (freshVotes || [])) {
-      if (vote.target_id) {
-        voteCounts[vote.target_id] = (voteCounts[vote.target_id] || 0) + 1;
-      }
-    }
-
-    // Find player with most votes - handle ties properly
-    let maxVotes = 0;
-    let eliminated: string | null = null;
-    let tiedPlayers: string[] = [];
-
-    for (const [targetId, count] of Object.entries(voteCounts)) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        eliminated = targetId;
-        tiedPlayers = [targetId];
-      } else if (count === maxVotes && maxVotes > 0) {
-        tiedPlayers.push(targetId);
-      }
-    }
-
-    // Only eliminate if there's a clear winner (no tie)
-    const hasTie = tiedPlayers.length > 1;
-    
-    if (eliminated && !hasTie && maxVotes > 0) {
-      await supabase
-        .from('room_players')
-        .update({ is_alive: false })
-        .eq('id', eliminated);
-
-      // Fetch fresh player data with roles for death message
-      const { data: freshPlayers, error } = await supabase
-        .from('room_players')
-        .select('id, role, player:players(nickname)')
-        .eq('room_id', roomId);
-
-      const victim = freshPlayers?.find(p => p.id === eliminated);
-      if (victim) {
-        // Show only Mafia or Civilian - don't reveal exact role (detective/doctor)
-        const displayRole = victim.role === 'mafia' ? 'Mafia' : 'Civilian';
-        const nickname = (victim.player as any)?.nickname || 'Unknown';
-        
-        await supabase.from('messages').insert({
-          room_id: roomId,
-          content: `⚖️ The town has spoken. ${nickname} has been eliminated. They were a ${displayRole}.`,
-          is_system: true,
-        });
-      }
-    } else if (hasTie) {
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: `⚖️ The vote ended in a tie. No one was eliminated.`,
-        is_system: true,
-      });
-    } else {
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: `The vote was inconclusive. No one was eliminated.`,
-        is_system: true,
-      });
-    }
-  }
-
+  // SECURE: End game via edge function
   async function endGame(winner: 'mafia' | 'civilians' | null) {
-    if (!gameState || !roomId) return;
+    if (!roomId || !playerId) return;
 
-    await supabase
-      .from('game_state')
-      .update({
-        phase: 'game_over',
-        winner,
-        phase_end_time: null,
-      })
-      .eq('id', gameState.id);
-
-    await supabase
-      .from('rooms')
-      .update({ status: 'finished' })
-      .eq('id', roomId);
-
-    if (winner) {
-      const winMessage = winner === 'mafia'
-        ? '🔪 The Mafia has taken over the town! Mafia wins!'
-        : '🎉 The town has eliminated all the Mafia! Civilians win!';
-
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: winMessage,
-        is_system: true,
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/end-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_id: roomId,
+          host_player_id: playerId,
+        }),
       });
-    } else {
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        content: '🛑 The game has been ended by the host.',
-        is_system: true,
-      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Error ending game:', result.error);
+      }
+    } catch (error) {
+      console.error('Error ending game:', error);
     }
   }
 

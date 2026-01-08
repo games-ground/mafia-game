@@ -1,1 +1,16 @@
 project_id = "sbouvvftqrukffcmdikg"
+
+[functions.start-game]
+verify_jwt = false
+
+[functions.submit-night-action]
+verify_jwt = false
+
+[functions.submit-vote]
+verify_jwt = false
+
+[functions.advance-phase]
+verify_jwt = false
+
+[functions.end-game]
+verify_jwt = false

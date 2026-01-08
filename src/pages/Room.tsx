@@ -45,7 +45,7 @@ export default function Room() {
     endGame,
     handleVotingCountdownComplete,
     handleNightCountdownComplete,
-  } = useGameState(room?.id || null, currentRoomPlayer?.id || null, room, roomPlayers);
+  } = useGameState(room?.id || null, currentRoomPlayer?.id || null, room, roomPlayers, player?.id || null);
 
   // Check if we need to show nickname prompt for direct room joins
   useEffect(() => {

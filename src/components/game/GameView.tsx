@@ -13,7 +13,7 @@ import { CountdownOverlay } from './CountdownOverlay';
 import { PhaseTransition } from './PhaseTransition';
 import { VotingSummary } from './VotingSummary';
 import { Button } from '@/components/ui/button';
-import { XCircle } from 'lucide-react';
+import { XCircle, Loader2 } from 'lucide-react';
 
 interface GameViewProps {
   room: Room;
@@ -56,8 +56,11 @@ export function GameView({
   const [isAdvancingFromSummary, setIsAdvancingFromSummary] = useState(false);
   const [showSummaryCountdown, setShowSummaryCountdown] = useState(false);
   const [showNightTransitionCountdown, setShowNightTransitionCountdown] = useState(false);
+  const [isWaitingForTransition, setIsWaitingForTransition] = useState(false);
   const prevPhaseRef = useRef(gameState.phase);
+  const prevDayRef = useRef(gameState.day_number);
   const countdownKeyRef = useRef(`${gameState.phase}-${gameState.day_number}`);
+  const votingSummaryShownForDayRef = useRef<number | null>(null);
 
   const isNight = gameState.phase === 'night';
   const isVoting = gameState.phase === 'day_voting';
@@ -70,14 +73,24 @@ export function GameView({
   }, [gameState.phase]);
 
   // Detect phase changes and trigger transition animation
+  // Also sync voting summary visibility across all clients
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
+    const prevDay = prevDayRef.current;
     const currentPhase = gameState.phase;
+    const currentDay = gameState.day_number;
     
-    // Only trigger on meaningful phase changes
+    // Handle phase transitions
     if (prevPhase !== currentPhase && currentPhase !== 'game_over' && currentPhase !== 'lobby') {
       const isTransitionToNight = currentPhase === 'night';
       const isTransitionToDay = currentPhase === 'day_discussion' || currentPhase === 'day_voting';
+      
+      // Clear ALL overlay states when phase actually changes - this syncs all clients
+      setIsWaitingForTransition(false);
+      setShowVotingSummary(false);
+      setShowNightTransitionCountdown(false);
+      setShowSummaryCountdown(false);
+      setIsAdvancingFromSummary(false);
       
       if ((isTransitionToNight && prevPhase !== 'lobby') || 
           (isTransitionToDay && prevPhase === 'night')) {
@@ -86,8 +99,14 @@ export function GameView({
       }
     }
     
+    // Reset voting summary tracking when day changes
+    if (currentDay !== prevDay) {
+      votingSummaryShownForDayRef.current = null;
+    }
+    
     prevPhaseRef.current = currentPhase;
-  }, [gameState.phase]);
+    prevDayRef.current = currentDay;
+  }, [gameState.phase, gameState.day_number]);
 
   // Hide role card after 5 seconds
   useEffect(() => {
@@ -165,12 +184,23 @@ export function GameView({
         />
       )}
 
+      {/* Waiting for server overlay - shows between countdown and phase transition */}
+      {isWaitingForTransition && !showPhaseTransition && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-16 h-16 text-primary animate-spin" />
+            <p className="text-muted-foreground">Processing...</p>
+          </div>
+        </div>
+      )}
+
       {/* Summary Countdown - 3-2-1 before showing voting summary */}
       {showSummaryCountdown && (
         <CountdownOverlay 
           seconds={3} 
           onComplete={() => {
             setShowSummaryCountdown(false);
+            votingSummaryShownForDayRef.current = gameState.day_number;
             setShowVotingSummary(true);
           }}
           message="Tallying votes..."
@@ -185,10 +215,10 @@ export function GameView({
           seconds={3} 
           onComplete={() => {
             setShowNightTransitionCountdown(false);
+            setShowVotingSummary(false);
+            setIsWaitingForTransition(true);
             setIsAdvancingFromSummary(true);
             onVotingCountdownComplete?.(true);
-            setShowVotingSummary(false);
-            setIsAdvancingFromSummary(false);
           }}
           message="Night falls..."
           countdownKey={`night-transition-${gameState.day_number}`}
@@ -210,10 +240,13 @@ export function GameView({
       )}
 
       {/* Night Countdown Overlay - show for all; only host advances */}
-      {showNightCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && (
+      {showNightCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && !isWaitingForTransition && (
         <CountdownOverlay 
           seconds={3} 
-          onComplete={() => onNightCountdownComplete?.(isHost)}
+          onComplete={() => {
+            setIsWaitingForTransition(true);
+            onNightCountdownComplete?.(isHost);
+          }}
           message="All night actions complete!"
           countdownKey={countdownKeyRef.current}
           phase="night"
@@ -221,7 +254,7 @@ export function GameView({
       )}
       
       {/* Voting Countdown Overlay - triggers summary countdown instead of direct summary */}
-      {showVotingCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && (
+      {showVotingCountdown && !showVotingSummary && !showSummaryCountdown && !showNightTransitionCountdown && !isWaitingForTransition && votingSummaryShownForDayRef.current !== gameState.day_number && (
         <CountdownOverlay 
           seconds={3} 
           onComplete={() => setShowSummaryCountdown(true)}

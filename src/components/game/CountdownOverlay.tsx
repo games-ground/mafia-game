@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2, Moon, Sun } from 'lucide-react';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 type Phase = 'night' | 'day_discussion' | 'day_voting' | 'lobby' | 'game_over';
 
@@ -24,6 +25,7 @@ export function CountdownOverlay({
   const hasCompletedRef = useRef(false);
   const countdownKeyRef = useRef(countdownKey);
   const onCompleteRef = useRef(onComplete);
+  const { playSound } = useSoundEffects();
   
   // Keep onComplete ref updated
   useEffect(() => {
@@ -52,12 +54,17 @@ export function CountdownOverlay({
       return;
     }
 
+    // Play tick sound
+    if (count <= 3) {
+      playSound(count === 1 ? 'finalTick' : 'tick');
+    }
+
     const timer = setTimeout(() => {
       setCount(c => c - 1);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [count, isWaitingForServer]);
+  }, [count, isWaitingForServer, playSound]);
 
   // Phase-specific background colors (opaque)
   const getPhaseBackground = () => {

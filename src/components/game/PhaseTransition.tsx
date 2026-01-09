@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 interface PhaseTransitionProps {
   phase: 'night' | 'day';
@@ -9,8 +10,12 @@ interface PhaseTransitionProps {
 
 export function PhaseTransition({ phase, onComplete }: PhaseTransitionProps) {
   const [animationStage, setAnimationStage] = useState<'enter' | 'hold' | 'exit'>('enter');
+  const { playSound } = useSoundEffects();
 
   useEffect(() => {
+    // Play transition sound immediately
+    playSound(phase === 'night' ? 'nightTransition' : 'dayTransition');
+    
     // Enter stage
     const enterTimeout = setTimeout(() => {
       setAnimationStage('hold');
@@ -31,7 +36,7 @@ export function PhaseTransition({ phase, onComplete }: PhaseTransitionProps) {
       clearTimeout(holdTimeout);
       clearTimeout(completeTimeout);
     };
-  }, [onComplete]);
+  }, [onComplete, phase, playSound]);
 
   const isNight = phase === 'night';
 

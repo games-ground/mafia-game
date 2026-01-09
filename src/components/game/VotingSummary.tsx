@@ -3,6 +3,7 @@ import { Vote, RoomPlayer, Player } from '@/types/game';
 import { Skull, Check, Users, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 interface VotingSummaryProps {
   votes: Vote[];
@@ -20,8 +21,12 @@ export function VotingSummary({
   isAdvancing 
 }: VotingSummaryProps) {
   const [animationStage, setAnimationStage] = useState<'enter' | 'results' | 'ready'>('enter');
+  const { playSound } = useSoundEffects();
 
   useEffect(() => {
+    // Play vote result sound
+    playSound('voteResult');
+    
     const enterTimeout = setTimeout(() => setAnimationStage('results'), 500);
     const readyTimeout = setTimeout(() => setAnimationStage('ready'), 1500);
     
@@ -29,7 +34,7 @@ export function VotingSummary({
       clearTimeout(enterTimeout);
       clearTimeout(readyTimeout);
     };
-  }, []);
+  }, [playSound]);
 
   // Count votes for each player
   const voteCounts: Record<string, number> = {};

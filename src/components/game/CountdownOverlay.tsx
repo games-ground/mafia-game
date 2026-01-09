@@ -23,6 +23,12 @@ export function CountdownOverlay({
   const [isWaitingForServer, setIsWaitingForServer] = useState(false);
   const hasCompletedRef = useRef(false);
   const countdownKeyRef = useRef(countdownKey);
+  const onCompleteRef = useRef(onComplete);
+  
+  // Keep onComplete ref updated
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   // Prevent re-counting if key hasn't changed
   useEffect(() => {
@@ -41,7 +47,7 @@ export function CountdownOverlay({
       if (!isWaitingForServer) {
         setIsWaitingForServer(true);
         hasCompletedRef.current = true;
-        onComplete();
+        onCompleteRef.current();
       }
       return;
     }
@@ -51,7 +57,7 @@ export function CountdownOverlay({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [count, onComplete, isWaitingForServer]);
+  }, [count, isWaitingForServer]);
 
   // Phase-specific background colors (opaque)
   const getPhaseBackground = () => {

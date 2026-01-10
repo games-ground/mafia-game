@@ -8,7 +8,8 @@ const corsHeaders = {
 interface NightActionRequest {
   room_id: string
   room_player_id: string
-  player_id: string // browser_id-linked player id for verification
+  player_id: string
+  browser_id: string // Required for authentication
   target_id: string
   action_type: 'kill' | 'protect' | 'investigate'
 }
@@ -24,12 +25,34 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { room_id, room_player_id, player_id, target_id, action_type }: NightActionRequest = await req.json()
+    const { room_id, room_player_id, player_id, browser_id, target_id, action_type }: NightActionRequest = await req.json()
 
-    if (!room_id || !room_player_id || !player_id || !target_id || !action_type) {
+    if (!room_id || !room_player_id || !player_id || !browser_id || !target_id || !action_type) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // SECURITY: Verify browser_id matches the player_id in the database
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('id, browser_id')
+      .eq('id', player_id)
+      .single()
+
+    if (playerError || !player) {
+      return new Response(
+        JSON.stringify({ error: 'Player not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (player.browser_id !== browser_id) {
+      console.error('Browser ID mismatch - potential impersonation attempt')
+      return new Response(
+        JSON.stringify({ error: 'Authentication failed' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 

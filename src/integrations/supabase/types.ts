@@ -292,6 +292,7 @@ export type Database = {
           games_won_as_mafia: number
           id: string
           nickname: string
+          profile_id: string | null
           total_kills: number
           total_saves: number
           updated_at: string
@@ -307,6 +308,7 @@ export type Database = {
           games_won_as_mafia?: number
           id?: string
           nickname?: string
+          profile_id?: string | null
           total_kills?: number
           total_saves?: number
           updated_at?: string
@@ -322,10 +324,76 @@ export type Database = {
           games_won_as_mafia?: number
           id?: string
           nickname?: string
+          profile_id?: string | null
           total_kills?: number
           total_saves?: number
           updated_at?: string
           visittotal_investigations?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          correct_investigations: number
+          created_at: string
+          display_name: string | null
+          email: string | null
+          games_played: number
+          games_won: number
+          games_won_as_civilian: number
+          games_won_as_mafia: number
+          id: string
+          is_premium: boolean
+          total_investigations: number
+          total_kills: number
+          total_saves: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          correct_investigations?: number
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          games_played?: number
+          games_won?: number
+          games_won_as_civilian?: number
+          games_won_as_mafia?: number
+          id?: string
+          is_premium?: boolean
+          total_investigations?: number
+          total_kills?: number
+          total_saves?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          correct_investigations?: number
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          games_played?: number
+          games_won?: number
+          games_won_as_civilian?: number
+          games_won_as_mafia?: number
+          id?: string
+          is_premium?: boolean
+          total_investigations?: number
+          total_kills?: number
+          total_saves?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

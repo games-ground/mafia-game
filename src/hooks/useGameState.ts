@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { GameState, RoomPlayer, RoleType, Vote, Player, Room } from '@/types/game';
+import { getBrowserId } from '@/lib/browser-id';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -138,7 +139,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     });
   }, [gameState?.phase, gameState?.mafia_target_id, gameState?.doctor_target_id, gameState?.detective_target_id, showNightCountdown, checkNightActionsComplete]);
 
-  // SECURE: Start game via edge function
+  // SECURE: Start game via edge function with browser_id authentication
   async function startGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }) {
     if (!roomId || !playerId) return;
 
@@ -149,6 +150,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         body: JSON.stringify({
           room_id: roomId,
           host_player_id: playerId,
+          browser_id: getBrowserId(),
         }),
       });
 
@@ -161,7 +163,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }
 
-  // SECURE: Submit night action via edge function
+  // SECURE: Submit night action via edge function with browser_id authentication
   async function submitNightAction(targetId: string, role: RoleType) {
     if (!gameState || !currentRoomPlayerId || !playerId) return;
 
@@ -181,6 +183,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
           room_id: gameState.room_id,
           room_player_id: currentRoomPlayerId,
           player_id: playerId,
+          browser_id: getBrowserId(),
           target_id: targetId,
           action_type: actionType,
         }),
@@ -195,7 +198,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }
 
-  // SECURE: Submit vote via edge function
+  // SECURE: Submit vote via edge function with browser_id authentication
   async function submitVote(targetId: string | null) {
     if (!gameState || !currentRoomPlayerId || !playerId) return;
 
@@ -207,6 +210,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
           room_id: gameState.room_id,
           room_player_id: currentRoomPlayerId,
           player_id: playerId,
+          browser_id: getBrowserId(),
           target_id: targetId,
         }),
       });
@@ -220,7 +224,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }
 
-  // SECURE: Advance phase via edge function
+  // SECURE: Advance phase via edge function with browser_id authentication
   async function advancePhase(roomPlayers: (RoomPlayer & { player: Player })[], force: boolean = false) {
     if (!gameState || !roomId || !playerId) return;
     
@@ -237,6 +241,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         body: JSON.stringify({
           room_id: roomId,
           player_id: playerId,
+          browser_id: getBrowserId(),
           force,
         }),
       });
@@ -252,7 +257,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
     }
   }
 
-  // SECURE: End game via edge function
+  // SECURE: End game via edge function with browser_id authentication
   async function endGame(winner: 'mafia' | 'civilians' | null) {
     if (!roomId || !playerId) return;
 
@@ -263,6 +268,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
         body: JSON.stringify({
           room_id: roomId,
           host_player_id: playerId,
+          browser_id: getBrowserId(),
         }),
       });
 

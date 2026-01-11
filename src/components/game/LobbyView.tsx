@@ -3,12 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Room, RoomPlayer, Player } from '@/types/game';
-import { Copy, Crown, UserMinus, Users, Check, Loader2, Clock, DoorOpen } from 'lucide-react';
+import { Copy, Crown, UserMinus, Users, Check, Loader2, Clock, DoorOpen, Link, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { GameConfig } from './GameConfig';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { GameRulesSheet } from './GameRulesSheet';
 import { cn } from '@/lib/utils';
+import { VotingTimerConfig } from './VotingTimerConfig';
 interface LobbyViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
@@ -18,7 +19,7 @@ interface LobbyViewProps {
   onKickPlayer: (roomPlayerId: string) => Promise<void> | void;
   onStartGame: () => Promise<void> | void;
   onLeave: () => void;
-  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count'>>) => void;
+  onUpdateConfig: (config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'voting_duration'>>) => void;
 }
 
 export function LobbyView({
@@ -78,6 +79,39 @@ export function LobbyView({
     }
   };
 
+  const copyRoomLink = async () => {
+    const roomLink = `${window.location.origin}/room/${room.code}`;
+    try {
+      await navigator.clipboard.writeText(roomLink);
+      toast.success('Room link copied!');
+    } catch (err) {
+      const textArea = document.createElement('textarea');
+      textArea.value = roomLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Room link copied!');
+    }
+  };
+
+  const shareRoom = async () => {
+    const roomLink = `${window.location.origin}/room/${room.code}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Mafia game!',
+          text: `Join my Mafia game with code: ${room.code}`,
+          url: roomLink,
+        });
+      } catch (err) {
+        // User cancelled share
+      }
+    } else {
+      await copyRoomLink();
+    }
+  };
+
   const allReady = roomPlayers.length >= room.min_players && 
     roomPlayers.every(rp => rp.is_ready || rp.player_id === room.host_id);
   
@@ -104,8 +138,31 @@ export function LobbyView({
               </span>
               <Copy className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </button>
-            <p className="text-muted-foreground text-sm mt-2">
-              Share this code with friends to join
+            
+            {/* Share Options */}
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyRoomLink}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <Link className="w-4 h-4" />
+                Copy Link
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={shareRoom}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+            </div>
+            
+            <p className="text-muted-foreground text-xs mt-3">
+              Share the code or link with friends to join
             </p>
           </div>
 
@@ -186,11 +243,17 @@ export function LobbyView({
 
           {/* Host Configuration */}
           {isHost && (
-            <GameConfig
-              room={room}
-              playerCount={roomPlayers.length}
-              onUpdateConfig={onUpdateConfig}
-            />
+            <>
+              <GameConfig
+                room={room}
+                playerCount={roomPlayers.length}
+                onUpdateConfig={onUpdateConfig}
+              />
+              <VotingTimerConfig
+                room={room}
+                onUpdateConfig={onUpdateConfig}
+              />
+            </>
           )}
 
           {/* Action Buttons */}

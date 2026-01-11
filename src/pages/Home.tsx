@@ -135,7 +135,7 @@ export default function Home() {
             size="sm"
             onClick={handleGoogleSignIn}
             disabled={isSigningIn}
-            className="glass-card border-border hover:bg-primary/10"
+            className="glass-card border-border hover:bg-secondary hover:text-foreground"
           >
             <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
               <path
@@ -260,7 +260,7 @@ export default function Home() {
                       variant="outline"
                       onClick={handleGoogleSignIn}
                       disabled={isSigningIn}
-                      className="w-full border-border hover:bg-primary/10"
+                      className="w-full border-border hover:bg-secondary hover:text-foreground"
                     >
                       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                         <path

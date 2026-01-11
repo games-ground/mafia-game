@@ -32,6 +32,7 @@ export interface Room {
   night_mode: NightMode;
   night_duration: number;
   day_duration: number;
+  voting_duration: number | null;
   show_vote_counts: boolean;
   reveal_roles_on_death: boolean;
   created_at: string;

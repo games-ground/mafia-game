@@ -367,8 +367,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     });
   }
 
-  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
+  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'voting_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
     if (!room || !playerId) return;
+
+    // Handle voting_duration: convert 0 to null (disabled)
+    const votingDuration = config.voting_duration === 0 ? null : config.voting_duration;
 
     // Use the secure RPC to update config (server validates host)
     const { error } = await supabase
@@ -381,6 +384,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
         p_night_mode: config.night_mode ?? null,
         p_day_duration: config.day_duration ?? null,
         p_night_duration: config.night_duration ?? null,
+        p_voting_duration: votingDuration !== undefined ? votingDuration : null,
         p_show_vote_counts: config.show_vote_counts ?? null,
         p_reveal_roles_on_death: config.reveal_roles_on_death ?? null,
       });

@@ -463,6 +463,7 @@ export type Database = {
           show_vote_counts: boolean
           status: string
           updated_at: string
+          voting_duration: number | null
         }
         Insert: {
           code: string
@@ -481,6 +482,7 @@ export type Database = {
           show_vote_counts?: boolean
           status?: string
           updated_at?: string
+          voting_duration?: number | null
         }
         Update: {
           code?: string
@@ -499,6 +501,7 @@ export type Database = {
           show_vote_counts?: boolean
           status?: string
           updated_at?: string
+          voting_duration?: number | null
         }
         Relationships: [
           {
@@ -651,21 +654,38 @@ export type Database = {
         Args: { p_host_player_id: string; p_room_id: string }
         Returns: boolean
       }
-      update_room_config: {
-        Args: {
-          p_day_duration?: number
-          p_detective_count?: number
-          p_doctor_count?: number
-          p_host_player_id: string
-          p_mafia_count?: number
-          p_night_duration?: number
-          p_night_mode?: string
-          p_reveal_roles_on_death?: boolean
-          p_room_id: string
-          p_show_vote_counts?: boolean
-        }
-        Returns: boolean
-      }
+      update_room_config:
+        | {
+            Args: {
+              p_day_duration?: number
+              p_detective_count?: number
+              p_doctor_count?: number
+              p_host_player_id: string
+              p_mafia_count?: number
+              p_night_duration?: number
+              p_night_mode?: string
+              p_reveal_roles_on_death?: boolean
+              p_room_id: string
+              p_show_vote_counts?: boolean
+              p_voting_duration?: number
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_day_duration?: number
+              p_detective_count?: number
+              p_doctor_count?: number
+              p_host_player_id: string
+              p_mafia_count?: number
+              p_night_duration?: number
+              p_night_mode?: string
+              p_reveal_roles_on_death?: boolean
+              p_room_id: string
+              p_show_vote_counts?: boolean
+            }
+            Returns: boolean
+          }
     }
     Enums: {
       game_phase:

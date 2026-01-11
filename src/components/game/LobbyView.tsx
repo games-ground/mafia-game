@@ -9,7 +9,7 @@ import { GameConfig } from './GameConfig';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { GameRulesSheet } from './GameRulesSheet';
 import { cn } from '@/lib/utils';
-import { VotingTimerConfig } from './VotingTimerConfig';
+
 interface LobbyViewProps {
   room: Room;
   roomPlayers: (RoomPlayer & { player: Player })[];
@@ -145,7 +145,7 @@ export function LobbyView({
                 variant="outline"
                 size="sm"
                 onClick={copyRoomLink}
-                className="gap-2 text-muted-foreground hover:text-foreground"
+                className="gap-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
               >
                 <Link className="w-4 h-4" />
                 Copy Link
@@ -154,7 +154,7 @@ export function LobbyView({
                 variant="outline"
                 size="sm"
                 onClick={shareRoom}
-                className="gap-2 text-muted-foreground hover:text-foreground"
+                className="gap-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
               >
                 <Share2 className="w-4 h-4" />
                 Share
@@ -243,17 +243,11 @@ export function LobbyView({
 
           {/* Host Configuration */}
           {isHost && (
-            <>
-              <GameConfig
-                room={room}
-                playerCount={roomPlayers.length}
-                onUpdateConfig={onUpdateConfig}
-              />
-              <VotingTimerConfig
-                room={room}
-                onUpdateConfig={onUpdateConfig}
-              />
-            </>
+            <GameConfig
+              room={room}
+              playerCount={roomPlayers.length}
+              onUpdateConfig={onUpdateConfig}
+            />
           )}
 
           {/* Action Buttons */}

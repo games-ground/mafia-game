@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, RoomPlayer, Player, RoleType } from '@/types/game';
+import { validateMessage } from '@/lib/validation';
+import { toast } from 'sonner';
 
 export function useMessages(roomId: string | null, currentRole: RoleType | null, isNight: boolean) {
   const [messages, setMessages] = useState<(Message & { room_player?: RoomPlayer & { player: Player } })[]>([]);
@@ -103,6 +105,13 @@ export function useMessages(roomId: string | null, currentRole: RoleType | null,
   async function sendMessage(content: string, playerId: string, roleType: RoleType | null = null) {
     if (!roomId || !content.trim()) return;
 
+    // SECURITY: Validate message content before database insert
+    const validation = validateMessage(content);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return;
+    }
+
     // Determine if this is a role-specific message
     // Only set role_type during night phase for special roles
     const isMafiaOnly = roleType === 'mafia';
@@ -117,6 +126,7 @@ export function useMessages(roomId: string | null, currentRole: RoleType | null,
 
     if (error) {
       console.error('Error sending message:', error);
+      toast.error('Failed to send message');
     }
   }
 

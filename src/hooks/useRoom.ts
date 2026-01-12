@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateRoomCode } from '@/lib/room-code';
+import { getBrowserId } from '@/lib/browser-id';
 import { Room, RoomPlayer, Player } from '@/types/game';
 import { toast } from 'sonner';
 
@@ -286,10 +287,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     const kickedPlayer = roomPlayers.find(rp => rp.id === roomPlayerId);
     if (!kickedPlayer) return;
 
-    // Use the secure RPC to kick player (server validates host)
+    // SECURITY: Use secure RPC with browser_id authentication
     const { error: kickError } = await supabase
       .rpc('kick_player', {
         p_host_player_id: playerId,
+        p_browser_id: getBrowserId(),
         p_room_id: room.id,
         p_target_room_player_id: roomPlayerId,
       });
@@ -373,10 +375,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     // Handle voting_duration: convert 0 to null (disabled)
     const votingDuration = config.voting_duration === 0 ? null : config.voting_duration;
 
-    // Use the secure RPC to update config (server validates host)
+    // SECURITY: Use secure RPC with browser_id authentication
     const { error } = await supabase
       .rpc('update_room_config', {
         p_host_player_id: playerId,
+        p_browser_id: getBrowserId(),
         p_room_id: room.id,
         p_mafia_count: config.mafia_count ?? null,
         p_doctor_count: config.doctor_count ?? null,

@@ -28,8 +28,9 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    // SECURITY: Use safe view to avoid exposing email addresses
     const { data, error } = await supabase
-      .from('profiles')
+      .from('profiles_public')
       .select('*')
       .eq('user_id', userId)
       .single();

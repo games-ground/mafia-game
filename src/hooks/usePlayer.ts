@@ -25,6 +25,9 @@ export function usePlayer() {
 
     try {
       // Try to get existing player by browser_id
+      // NOTE: We need to query 'players' table directly here because browser_id 
+      // is hidden in the safe view, but this query is safe since we're filtering 
+      // by our own browser_id (private to the client)
       const { data: existingPlayer, error: fetchError } = await supabase
         .from('players')
         .select('*')

@@ -37,12 +37,12 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   }, [roomCode]);
 
   const fetchRoomPlayers = async (roomId: string) => {
-    // Use the safe view that hides roles appropriately
+    // SECURITY: Use safe views that hide sensitive data (roles and browser_id)
     const { data, error } = await supabase
       .from('room_players_safe')
       .select(`
         *,
-        player:players(*)
+        player:players_public(*)
       `)
       .eq('room_id', roomId)
       .order('joined_at', { ascending: true });

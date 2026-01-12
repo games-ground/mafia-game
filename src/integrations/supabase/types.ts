@@ -218,6 +218,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "kicked_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "kicked_players_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
@@ -338,6 +345,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "players_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -437,6 +451,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "room_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "room_players_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
@@ -509,6 +530,13 @@ export type Database = {
             columns: ["host_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rooms_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "players_public"
             referencedColumns: ["id"]
           },
         ]
@@ -628,6 +656,123 @@ export type Database = {
           },
         ]
       }
+      players_public: {
+        Row: {
+          correct_investigations: number | null
+          created_at: string | null
+          games_played: number | null
+          games_won: number | null
+          games_won_as_civilian: number | null
+          games_won_as_mafia: number | null
+          id: string | null
+          nickname: string | null
+          profile_id: string | null
+          total_kills: number | null
+          total_saves: number | null
+          updated_at: string | null
+          visittotal_investigations: number | null
+        }
+        Insert: {
+          correct_investigations?: number | null
+          created_at?: string | null
+          games_played?: number | null
+          games_won?: number | null
+          games_won_as_civilian?: number | null
+          games_won_as_mafia?: number | null
+          id?: string | null
+          nickname?: string | null
+          profile_id?: string | null
+          total_kills?: number | null
+          total_saves?: number | null
+          updated_at?: string | null
+          visittotal_investigations?: number | null
+        }
+        Update: {
+          correct_investigations?: number | null
+          created_at?: string | null
+          games_played?: number | null
+          games_won?: number | null
+          games_won_as_civilian?: number | null
+          games_won_as_mafia?: number | null
+          id?: string | null
+          nickname?: string | null
+          profile_id?: string | null
+          total_kills?: number | null
+          total_saves?: number | null
+          updated_at?: string | null
+          visittotal_investigations?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "players_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles_public: {
+        Row: {
+          avatar_url: string | null
+          correct_investigations: number | null
+          created_at: string | null
+          display_name: string | null
+          games_played: number | null
+          games_won: number | null
+          games_won_as_civilian: number | null
+          games_won_as_mafia: number | null
+          id: string | null
+          is_premium: boolean | null
+          total_investigations: number | null
+          total_kills: number | null
+          total_saves: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          correct_investigations?: number | null
+          created_at?: string | null
+          display_name?: string | null
+          games_played?: number | null
+          games_won?: number | null
+          games_won_as_civilian?: number | null
+          games_won_as_mafia?: number | null
+          id?: string | null
+          is_premium?: boolean | null
+          total_investigations?: number | null
+          total_kills?: number | null
+          total_saves?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          correct_investigations?: number | null
+          created_at?: string | null
+          display_name?: string | null
+          games_played?: number | null
+          games_won?: number | null
+          games_won_as_civilian?: number | null
+          games_won_as_mafia?: number | null
+          id?: string | null
+          is_premium?: boolean | null
+          total_investigations?: number | null
+          total_kills?: number | null
+          total_saves?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       room_players_safe: {
         Row: {
           id: string | null
@@ -668,6 +813,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "room_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "room_players_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
@@ -680,7 +832,7 @@ export type Database = {
     Functions: {
       cleanup_idle_rooms: { Args: { p_idle_minutes?: number }; Returns: number }
       get_mafia_partners: {
-        Args: { p_player_id: string; p_room_id: string }
+        Args: { p_browser_id: string; p_player_id: string; p_room_id: string }
         Returns: {
           nickname: string
           partner_player_id: string
@@ -688,11 +840,12 @@ export type Database = {
         }[]
       }
       get_own_role: {
-        Args: { p_player_id: string; p_room_id: string }
+        Args: { p_browser_id: string; p_player_id: string; p_room_id: string }
         Returns: string
       }
       kick_player: {
         Args: {
+          p_browser_id: string
           p_host_player_id: string
           p_room_id: string
           p_target_room_player_id: string
@@ -700,7 +853,11 @@ export type Database = {
         Returns: boolean
       }
       restart_game: {
-        Args: { p_host_player_id: string; p_room_id: string }
+        Args: {
+          p_browser_id: string
+          p_host_player_id: string
+          p_room_id: string
+        }
         Returns: boolean
       }
       start_game: {
@@ -710,6 +867,7 @@ export type Database = {
       update_room_config:
         | {
             Args: {
+              p_browser_id: string
               p_day_duration?: number
               p_detective_count?: number
               p_doctor_count?: number
@@ -736,6 +894,7 @@ export type Database = {
               p_reveal_roles_on_death?: boolean
               p_room_id: string
               p_show_vote_counts?: boolean
+              p_voting_duration?: number
             }
             Returns: boolean
           }

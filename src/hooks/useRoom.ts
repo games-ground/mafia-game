@@ -57,9 +57,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     // For the current player, fetch their own role and mafia partners using secure RPCs
     if (playerId) {
       // CRITICAL: Always fetch fresh role from database
+      // SECURITY: Include browser_id for authentication
+      const browserId = getBrowserId();
       const [roleResult, partnersResult] = await Promise.all([
-        supabase.rpc('get_own_role', { p_player_id: playerId, p_room_id: roomId }),
-        supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_room_id: roomId }),
+        supabase.rpc('get_own_role', { p_player_id: playerId, p_browser_id: browserId, p_room_id: roomId }),
+        supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_browser_id: browserId, p_room_id: roomId }),
       ]);
       
       const ownRole = roleResult.data;

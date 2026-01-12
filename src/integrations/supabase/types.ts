@@ -578,12 +578,63 @@ export type Database = {
       }
     }
     Views: {
+      game_state_safe: {
+        Row: {
+          created_at: string | null
+          day_number: number | null
+          id: string | null
+          last_detective_target_name: string | null
+          last_doctor_target_name: string | null
+          last_mafia_target_name: string | null
+          phase: Database["public"]["Enums"]["game_phase"] | null
+          phase_end_time: string | null
+          room_id: string | null
+          updated_at: string | null
+          winner: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          day_number?: number | null
+          id?: string | null
+          last_detective_target_name?: never
+          last_doctor_target_name?: never
+          last_mafia_target_name?: never
+          phase?: Database["public"]["Enums"]["game_phase"] | null
+          phase_end_time?: string | null
+          room_id?: string | null
+          updated_at?: string | null
+          winner?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          day_number?: number | null
+          id?: string | null
+          last_detective_target_name?: never
+          last_doctor_target_name?: never
+          last_mafia_target_name?: never
+          phase?: Database["public"]["Enums"]["game_phase"] | null
+          phase_end_time?: string | null
+          room_id?: string | null
+          updated_at?: string | null
+          winner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_state_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: true
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_players_safe: {
         Row: {
           id: string | null
           is_alive: boolean | null
           is_ready: boolean | null
           joined_at: string | null
+          kicked: boolean | null
           player_id: string | null
           role: Database["public"]["Enums"]["role_type"] | null
           room_id: string | null
@@ -593,6 +644,7 @@ export type Database = {
           is_alive?: boolean | null
           is_ready?: boolean | null
           joined_at?: string | null
+          kicked?: boolean | null
           player_id?: string | null
           role?: never
           room_id?: string | null
@@ -602,6 +654,7 @@ export type Database = {
           is_alive?: boolean | null
           is_ready?: boolean | null
           joined_at?: string | null
+          kicked?: boolean | null
           player_id?: string | null
           role?: never
           room_id?: string | null

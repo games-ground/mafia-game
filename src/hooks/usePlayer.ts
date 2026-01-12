@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getBrowserId, getNickname, setNickname as saveNickname } from '@/lib/browser-id';
+import { validateNickname } from '@/lib/validation';
 import { Player } from '@/types/game';
 import { useAuth } from './useAuth';
+import { toast } from 'sonner';
 
 export function usePlayer() {
   const [player, setPlayer] = useState<Player | null>(null);
@@ -94,6 +96,13 @@ export function usePlayer() {
   async function updateNickname(nickname: string) {
     if (!player) return;
 
+    // SECURITY: Validate nickname before database update
+    const validation = validateNickname(nickname);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return;
+    }
+
     saveNickname(nickname);
     setHasStoredNickname(nickname !== 'Anonymous');
 
@@ -106,6 +115,7 @@ export function usePlayer() {
 
     if (error) {
       console.error('Error updating nickname:', error);
+      toast.error('Failed to update nickname');
     } else {
       setPlayer(data as Player);
     }

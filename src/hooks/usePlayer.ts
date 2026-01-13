@@ -24,15 +24,14 @@ export function usePlayer() {
     setHasStoredNickname(!!savedNickname && savedNickname !== 'Anonymous');
 
     try {
-      // Try to get existing player by browser_id
-      // NOTE: We need to query 'players' table directly here because browser_id 
-      // is hidden in the safe view, but this query is safe since we're filtering 
-      // by our own browser_id (private to the client)
-      const { data: existingPlayer, error: fetchError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('browser_id', browserId)
-        .single();
+      // Try to get existing player by browser_id using secure RPC function
+      // This function is SECURITY DEFINER and bypasses RLS to return only
+      // the player record that matches the provided browser_id
+      const { data: existingPlayerData, error: fetchError } = await supabase
+        .rpc('get_player_by_browser_id', { p_browser_id: browserId });
+      
+      // RPC returns an array, get first element
+      const existingPlayer = existingPlayerData?.[0] || null;
 
       if (existingPlayer) {
         // If user is authenticated and player doesn't have profile_id, link them
@@ -62,7 +61,7 @@ export function usePlayer() {
           setPlayer(existingPlayer as Player);
           setHasStoredNickname(existingPlayer.nickname !== 'Anonymous');
         }
-      } else if (fetchError?.code === 'PGRST116') {
+      } else if (!existingPlayer) {
         // Player doesn't exist, create one
         // Use profile display name if authenticated, otherwise saved nickname
         const initialNickname = (isAuthenticated && profile?.display_name) 

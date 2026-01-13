@@ -843,6 +843,31 @@ export type Database = {
         Args: { p_browser_id: string; p_player_id: string; p_room_id: string }
         Returns: string
       }
+      get_player_by_browser_id: {
+        Args: { p_browser_id: string }
+        Returns: {
+          browser_id: string
+          correct_investigations: number
+          created_at: string
+          games_played: number
+          games_won: number
+          games_won_as_civilian: number
+          games_won_as_mafia: number
+          id: string
+          nickname: string
+          profile_id: string | null
+          total_kills: number
+          total_saves: number
+          updated_at: string
+          visittotal_investigations: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "players"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       kick_player: {
         Args: {
           p_browser_id: string

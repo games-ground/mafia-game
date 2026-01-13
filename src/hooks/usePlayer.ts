@@ -105,21 +105,23 @@ export function usePlayer() {
       return;
     }
 
-    saveNickname(nickname);
-    setHasStoredNickname(nickname !== 'Anonymous');
-
+    const browserId = getBrowserId();
+    
+    // Use secure RPC function to update nickname (bypasses RLS)
     const { data, error } = await supabase
-      .from('players')
-      .update({ nickname })
-      .eq('id', player.id)
-      .select()
-      .single();
+      .rpc('update_player_nickname', { 
+        p_browser_id: browserId, 
+        p_nickname: nickname 
+      });
 
     if (error) {
       console.error('Error updating nickname:', error);
       toast.error('Failed to update nickname');
-    } else {
+    } else if (data) {
+      saveNickname(nickname);
+      setHasStoredNickname(nickname !== 'Anonymous');
       setPlayer(data as Player);
+      toast.success('Nickname updated!');
     }
   }
 

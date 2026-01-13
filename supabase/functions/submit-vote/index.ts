@@ -1,8 +1,25 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// Get allowed origins from environment or use a sensible default
+const allowedOrigins = Deno.env.get('ALLOWED_ORIGINS')?.split(',') || ['https://lovable.dev', 'https://*.lovable.app']
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || ''
+  
+  // Check if origin matches allowed patterns
+  const isAllowed = allowedOrigins.some(pattern => {
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace('*', '.*') + '$')
+      return regex.test(origin)
+    }
+    return pattern === origin
+  })
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
 }
 
 interface VoteRequest {
@@ -14,6 +31,8 @@ interface VoteRequest {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }

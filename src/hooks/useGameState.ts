@@ -21,8 +21,9 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       return;
     }
 
+    // SECURITY: Use safe view that hides sensitive night action targets
     const { data, error } = await supabase
-      .from('game_state')
+      .from('game_state_safe')
       .select('*')
       .eq('room_id', roomId)
       .single();
@@ -69,7 +70,7 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
       .channel(`game-${roomId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'game_state', filter: `room_id=eq.${roomId}` },
+        { event: '*', schema: 'public', table: 'game_state_safe', filter: `room_id=eq.${roomId}` },
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             setGameState(payload.new as GameState);
@@ -284,9 +285,10 @@ export function useGameState(roomId: string | null, currentRoomPlayerId: string 
   async function restartGame(roomPlayers: (RoomPlayer & { player: Player })[], roomConfig: { mafia_count: number; doctor_count: number; detective_count: number }, hostPlayerId?: string) {
     if (!roomId || !hostPlayerId) return;
 
-    // Use secure RPC to reset everything in a single DB transaction
+    // SECURITY: Use secure RPC with browser_id authentication
     const { error } = await supabase.rpc('restart_game', {
       p_host_player_id: hostPlayerId,
+      p_browser_id: getBrowserId(),
       p_room_id: roomId,
     });
 

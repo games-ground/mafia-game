@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateRoomCode } from '@/lib/room-code';
+import { getBrowserId } from '@/lib/browser-id';
 import { Room, RoomPlayer, Player } from '@/types/game';
 import { toast } from 'sonner';
 
@@ -36,12 +37,12 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
   }, [roomCode]);
 
   const fetchRoomPlayers = async (roomId: string) => {
-    // Use the safe view that hides roles appropriately
+    // SECURITY: Use safe views that hide sensitive data (roles and browser_id)
     const { data, error } = await supabase
       .from('room_players_safe')
       .select(`
         *,
-        player:players(*)
+        player:players_public(*)
       `)
       .eq('room_id', roomId)
       .order('joined_at', { ascending: true });
@@ -56,9 +57,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     // For the current player, fetch their own role and mafia partners using secure RPCs
     if (playerId) {
       // CRITICAL: Always fetch fresh role from database
+      // SECURITY: Include browser_id for authentication
+      const browserId = getBrowserId();
       const [roleResult, partnersResult] = await Promise.all([
-        supabase.rpc('get_own_role', { p_player_id: playerId, p_room_id: roomId }),
-        supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_room_id: roomId }),
+        supabase.rpc('get_own_role', { p_player_id: playerId, p_browser_id: browserId, p_room_id: roomId }),
+        supabase.rpc('get_mafia_partners', { p_player_id: playerId, p_browser_id: browserId, p_room_id: roomId }),
       ]);
       
       const ownRole = roleResult.data;
@@ -286,10 +289,11 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     const kickedPlayer = roomPlayers.find(rp => rp.id === roomPlayerId);
     if (!kickedPlayer) return;
 
-    // Use the secure RPC to kick player (server validates host)
+    // SECURITY: Use secure RPC with browser_id authentication
     const { error: kickError } = await supabase
       .rpc('kick_player', {
         p_host_player_id: playerId,
+        p_browser_id: getBrowserId(),
         p_room_id: room.id,
         p_target_room_player_id: roomPlayerId,
       });
@@ -367,13 +371,17 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
     });
   }
 
-  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
+  async function updateRoomConfig(config: Partial<Pick<Room, 'mafia_count' | 'doctor_count' | 'detective_count' | 'night_mode' | 'night_duration' | 'day_duration' | 'voting_duration' | 'show_vote_counts' | 'reveal_roles_on_death'>>) {
     if (!room || !playerId) return;
 
-    // Use the secure RPC to update config (server validates host)
+    // Handle voting_duration: convert 0 to null (disabled)
+    const votingDuration = config.voting_duration === 0 ? null : config.voting_duration;
+
+    // SECURITY: Use secure RPC with browser_id authentication
     const { error } = await supabase
       .rpc('update_room_config', {
         p_host_player_id: playerId,
+        p_browser_id: getBrowserId(),
         p_room_id: room.id,
         p_mafia_count: config.mafia_count ?? null,
         p_doctor_count: config.doctor_count ?? null,
@@ -381,6 +389,7 @@ export function useRoom(roomCode: string | null, playerId: string | null) {
         p_night_mode: config.night_mode ?? null,
         p_day_duration: config.day_duration ?? null,
         p_night_duration: config.night_duration ?? null,
+        p_voting_duration: votingDuration !== undefined ? votingDuration : null,
         p_show_vote_counts: config.show_vote_counts ?? null,
         p_reveal_roles_on_death: config.reveal_roles_on_death ?? null,
       });

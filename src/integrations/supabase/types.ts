@@ -889,6 +889,31 @@ export type Database = {
         Args: { p_host_player_id: string; p_room_id: string }
         Returns: boolean
       }
+      update_player_nickname: {
+        Args: { p_browser_id: string; p_nickname: string }
+        Returns: {
+          browser_id: string
+          correct_investigations: number
+          created_at: string
+          games_played: number
+          games_won: number
+          games_won_as_civilian: number
+          games_won_as_mafia: number
+          id: string
+          nickname: string
+          profile_id: string | null
+          total_kills: number
+          total_saves: number
+          updated_at: string
+          visittotal_investigations: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "players"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_room_config:
         | {
             Args: {
